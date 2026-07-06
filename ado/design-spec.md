@@ -1149,6 +1149,7 @@ invoke_api() {
     { "value": "Coder" },
     { "value": "Code Reviewer" },
     { "value": "Test Executor" },
+    { "value": "Feature Verifier" },
     { "value": "Orchestrator" }
   ]
 }
