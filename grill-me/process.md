@@ -8,6 +8,8 @@ A structured process to verify that each persona has understood the context bund
 
 Each persona runs a role-specific "Grill Me" session in their native harness. The AI interrogates them on the specific knowledge points they need to understand from the context bundle. If a misconception surfaces, the root cause is identified (persona misunderstanding vs. document ambiguity), the document is fixed, and the resolution is captured in the audit trail.
 
+> **Scores are learning telemetry, not performance metrics.** Grill sessions run in the persona's own harness with the documents open — they are trivially gameable by anyone motivated to game them. If scores are used for individual performance evaluation, people will optimize for passing rather than understanding, and the signal is destroyed (Goodhart's law). Use the scores to improve *documents and templates* (see Continuous Improvement below), never to rank people. State this explicitly to every participant.
+
 ```
 PRD drafted by BA/PO
     │
@@ -135,6 +137,8 @@ No access to: Code, Figma designs, eng design.
 | 8 | **Priority/trade-offs** | "If we had to cut scope by 40%, what goes? If we doubled the timeline, what would you add?" |
 
 **Goal:** Expose vague language, unstated assumptions, and missing edge cases. The BA/PO must *defend* their decisions, not just restate them.
+
+**Structural limitation & mitigation:** With only the PRD as context, the AI can probe *ambiguity* but cannot detect *wrong requirements* — it knows nothing the document doesn't say. Mitigate by generating questions from the **other personas' perspectives**: "What will the developer need to know that this document doesn't say?", "What will the designer have to assume?", "What will QA be unable to test as written?" This forces the PRD to be evaluated against its downstream consumers, not against itself.
 
 ---
 

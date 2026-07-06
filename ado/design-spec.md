@@ -9,14 +9,17 @@
 
 1. [Work Item Type: AI Story](#1-work-item-type-ai-story)
 2. [Work Item Type: AI Verification](#2-work-item-type-ai-verification)
-3. [Custom Picklists (Global Lists)](#3-custom-picklists-global-lists)
-4. [Custom Fields Reference](#4-custom-fields-reference)
-5. [State Machines](#5-state-machines)
-6. [Relationship Model](#6-relationship-model)
-7. [Form Layout](#7-form-layout)
-8. [Pipeline Field Mapping](#8-pipeline-field-mapping)
-9. [Implementation Steps](#9-implementation-steps)
-10. [REST API Payloads](#10-rest-api-payloads)
+3. [Work Item Type: AI Agent Run](#3-work-item-type-ai-agent-run)
+4. [Custom Picklists (Global Lists)](#4-custom-picklists-global-lists)
+5. [Custom Fields Reference](#5-custom-fields-reference)
+6. [State Machines](#6-state-machines)
+7. [Relationship Model](#7-relationship-model)
+8. [Form Layout](#8-form-layout)
+9. [Pipeline Field Mapping (ADO-as-Contract)](#9-pipeline-field-mapping-ado-as-contract)
+10. [Model Pricing Reference](#10-model-pricing-reference)
+11. [Observability Analytics](#11-observability-analytics)
+12. [Implementation Steps](#12-implementation-steps)
+13. [REST API Payloads](#13-rest-api-payloads)
 
 ---
 
@@ -55,18 +58,20 @@ Drafted ────────────────────────
     │                                          │
     ▼                                          │
 In Planning ──► Plan Review ──► In Coding ──► Code Review
-    │              │               │              │
-    │              │               │              │
-    │              ▼               │              │
-    │         (revision loop)      │              │
-    │              │               │              │
-    └──────────────┘               │              │
-                                   ▼              ▼
-                              In Testing ◄──── Code Review (approved)
-                                   │
-                                   ├──► Approved (all tests pass)
-                                   │
-                                   └──► Blocked (max revisions hit)
+    │              │               ▲  │           │
+    │              │               │  │           │
+    │              ▼               │  │           │
+    │         (revision loop)      │  │           │
+    │              │               │  │           │
+    └──────────────┘               │  │           │
+                                   │  ▼           ▼
+                                   │ In Testing ◄── Code Review (approved)
+                                   │  │
+                                   │  ├──► Approved (all tests pass)
+                                   │  │
+                                   └──┤ (self-repair loop: tests failed, max 2)
+                                      │
+                                      └──► Blocked (max revisions hit)
 ```
 
 #### Allowed Transitions (detailed)
@@ -81,9 +86,12 @@ In Planning ──► Plan Review ──► In Coding ──► Code Review
 | Code Review | In Testing | Code approved | Code review passes |
 | Code Review | In Coding | Changes requested | Code review requests changes (revision loop) |
 | In Testing | Approved | All tests passed | All gates clear |
+| In Testing | In Coding | Tests failed | Self-repair loop: Coder receives failure evidence (max 2, tracked in `TestRevisionCount`) |
 | In Testing | Blocked | Max revision count reached | Escalation |
 | *Any state* | Blocked | Escalation | Human intervention required |
 | Blocked | Drafted | Reset and retry | Human unblocks, resets |
+
+> **Self-repair principle:** Automated repair loops are the highest-leverage quality feature in agentic pipelines (see `docs/research-synthesis.md`). The Test Executor never fixes code — it reports honestly. The *Orchestrator* routes failures back to the Coder with full failure evidence. Honest reporting and automated repair are complementary, not conflicting.
 
 ### Custom Fields on AI Story
 
@@ -96,9 +104,28 @@ In Planning ──► Plan Review ──► In Coding ──► Code Review
 | 5 | Code Review Status | `Custom.AIStory.CodeReviewStatus` | String | CodeReviewStatus picklist | Yes | Code Review | Approval state of the generated code |
 | 6 | AI Model Used | `Custom.AIStory.ModelUsed` | String | AIFoundryModel picklist | Yes | Drafted | Which Azure Foundry model generated this story |
 | 7 | Test Results | `Custom.AIStory.TestResults` | HTML | — | No | In Testing | Pass/Fail details with evidence traces |
-| 8 | Revision Count | `Custom.AIStory.RevisionCount` | Integer | — | Yes | All states | Loop counter; max 2 per stage before escalation |
+| 8 | Revision Count | `Custom.AIStory.RevisionCount` | Integer | — | Yes | All states | **Deprecated** — superseded by the per-stage counters `PlanRevisionCount`, `CodeRevisionCount`, and `TestRevisionCount`. Retained for backward compatibility only |
 | 9 | Acceptance Criteria | `Custom.AIStory.AcceptanceCriteria` | HTML | — | No | Drafted, Blocked | Given/When/Then formatted acceptance criteria |
 | 10 | Parent Feature | `Custom.AIStory.ParentFeature` | String | — | No | Drafted | Title of the parent Epic (link stored as work item link) |
+
+### Observability Fields on AI Story
+
+These fields capture **aggregate metrics** rolled up from all `AI Agent Run` child work items. Updated by the Orchestrator at each stage completion.
+
+| # | Label | Reference Name | Type | Description |
+|---|-------|---------------|------|-------------|
+| 11 | Total Cost (USD) | `Custom.AIStory.TotalCostUSD` | Double | Sum of all child AI Agent Run EstimatedCostUSD values |
+| 12 | Plan Revision Count | `Custom.AIStory.PlanRevisionCount` | Integer | Number of plan revision loops (separate from code loops) |
+| 13 | Code Revision Count | `Custom.AIStory.CodeRevisionCount` | Integer | Number of code revision loops |
+| 14 | Context Bundle Score | `Custom.AIStory.ContextBundleScore` | Integer | Quality score of input context bundle (0–100), set by Story Decomposer |
+| 15 | Test Plan Score | `Custom.AIStory.TestPlanScore` | Integer | Quality score of generated test plan (0–100), set by Plan Reviewer |
+| 16 | Impl Plan Score | `Custom.AIStory.ImplPlanScore` | Integer | Quality score of implementation plan (0–100), set by Plan Reviewer |
+| 17 | Code Quality Score | `Custom.AIStory.CodeQualityScore` | Integer | Final code review score (0–100), set by Code Reviewer |
+| 18 | Test Pass Rate | `Custom.AIStory.TestPassRate` | Double | Percentage of tests that passed (0.0–100.0), set by Test Executor |
+| 19 | Code Review Findings | `Custom.AIStory.CodeReviewFindings` | HTML | Structured list of findings from Code Reviewer (violations, severity) |
+| 20 | Test Revision Count | `Custom.AIStory.TestRevisionCount` | Integer | Number of test-failure self-repair loops (In Testing → In Coding) |
+| 21 | Estimated Human Hours | `Custom.AIStory.EstimatedHumanHours` | Double | Rough estimate of human effort this story would have required, set by Story Decomposer. Anchors the cost-vs-value comparison on dashboards |
+| 22 | Pull Request URL | `Custom.AIStory.PullRequestUrl` | String | Link to the story branch PR opened by the Coder. Human merge of this PR is the final quality gate |
 
 ### Fields Inherited from Basic (system)
 
@@ -180,9 +207,60 @@ Pending ──► In Progress ──► Completed
 
 ---
 
-## 3. Custom Picklists (Global Lists)
+## 3. Work Item Type: AI Agent Run
 
-### 3.1 PlanReviewStatus
+### Purpose
+Records a **single agent invocation** within the pipeline. One work item is created by the Orchestrator each time a sub-agent is called. This is the atomic unit of observability — every token spent, every model used, every quality decision, and every artifact produced is captured here. Cross-story queries on these records enable model benchmarking, cost analysis, and quality tuning.
+
+### Identity
+| Property | Value |
+|---|---|
+| Name | `AI Agent Run` |
+| Reference Name | `Custom.AIAgentRun` |
+| Color | `#005A9E` (Dark Blue) |
+| Icon | Robot / Gear (icon: `icon-gear`) |
+| Description | Records a single AI agent invocation with cost, model, tokens, quality score, and output artifact. |
+
+### State Machine
+
+| # | State | Category | Description | Color |
+|---|-------|----------|-------------|-------|
+| 1 | Running | In Progress | Agent is actively generating output | #FFCC00 |
+| 2 | Completed | Resolved | Agent finished, artifact recorded | #00B300 |
+| 3 | Failed | Removed | Agent failed or hit revision limit | #CC0000 |
+
+#### Allowed Transitions
+
+| From | To | Trigger |
+|---|---|---|
+| Running | Completed | Orchestrator receives output, writes artifact |
+| Running | Failed | Error or escalation |
+| Failed | Running | Human unblocks and retries |
+
+### Custom Fields on AI Agent Run
+
+| # | Label | Reference Name | Type | Picklist | Required | Description |
+|---|-------|---------------|------|----------|----------|-------------|
+| 1 | Agent Name | `Custom.AIAgentRun.AgentName` | String | AgentName | Yes | Which agent was invoked (e.g., "Test Plan Generator") |
+| 2 | Model Used | `Custom.AIAgentRun.ModelUsed` | String | AIFoundryModel | Yes | AI model that processed this run |
+| 3 | Input Tokens | `Custom.AIAgentRun.InputTokens` | Integer | — | Yes | Prompt tokens consumed |
+| 4 | Output Tokens | `Custom.AIAgentRun.OutputTokens` | Integer | — | Yes | Completion tokens generated |
+| 5 | Estimated Cost (USD) | `Custom.AIAgentRun.EstimatedCostUSD` | Double | — | Yes | Calculated: (InputTokens × price_in) + (OutputTokens × price_out) for the selected model |
+| 6 | Duration (seconds) | `Custom.AIAgentRun.DurationSeconds` | Integer | — | Yes | Wall-clock seconds from invocation to completion |
+| 7 | Quality Score | `Custom.AIAgentRun.QualityScore` | Integer | — | No | Self-reported 0–100 score; required for review agents (Plan Reviewer, Code Reviewer) |
+| 8 | Stage Decision | `Custom.AIAgentRun.StageDecision` | String | StageDecision | Yes | The verdict this run produced |
+| 9 | Revision Attempt | `Custom.AIAgentRun.RevisionAttempt` | Integer | — | Yes | Which attempt this is (1 = first run, 2 = first retry, 3 = second retry) |
+| 10 | Artifact Content | `Custom.AIAgentRun.ArtifactContent` | HTML | — | No | The full output artifact (test plan, impl plan, review, test results, etc.) |
+| 11 | Error Details | `Custom.AIAgentRun.ErrorDetails` | HTML | — | No | If state = Failed: full error description and recommended action |
+| 12 | Parent Story Title | `Custom.AIAgentRun.ParentStoryTitle` | String | — | No | Denormalized title of the parent AI Story for cross-story queries |
+| 13 | Agent Version | `Custom.AIAgentRun.AgentVersion` | String | — | Yes | Version identifier (or content hash) of the agent instruction file used for this run. Enables attributing quality changes to prompt tuning vs. model changes |
+| 14 | Token Source | `Custom.AIAgentRun.TokenSource` | String | TokenSource | Yes | Whether token counts are exact (`Reported` — from model API usage metadata) or approximated (`Estimated` — chars ÷ 4). Never mix sources in the same A/B comparison |
+
+---
+
+## 4. Custom Picklists (Global Lists)
+
+### 4.1 PlanReviewStatus
 
 Used on: `Custom.AIStory.PlanReviewStatus`
 
@@ -191,7 +269,7 @@ Used on: `Custom.AIStory.PlanReviewStatus`
 | 1 | Approved | Implementation plan approved, proceed to coding |
 | 2 | Revisions Requested | Plan needs changes, return to In Planning |
 
-### 3.2 CodeReviewStatus
+### 4.2 CodeReviewStatus
 
 Used on: `Custom.AIStory.CodeReviewStatus`
 
@@ -200,7 +278,7 @@ Used on: `Custom.AIStory.CodeReviewStatus`
 | 1 | Approved | Code approved, proceed to testing |
 | 2 | Changes Requested | Code needs fixes, return to In Coding |
 
-### 3.3 SignOffStatus
+### 4.3 SignOffStatus
 
 Used on: `Custom.AIVerification.SignOffStatus`
 
@@ -209,7 +287,7 @@ Used on: `Custom.AIVerification.SignOffStatus`
 | 1 | Approved | Persona passed the grill — sign-off granted |
 | 2 | Needs Revision | Persona failed — document fixes required |
 
-### 3.4 Persona
+### 4.4 Persona
 
 Used on: `Custom.AIVerification.Persona`
 
@@ -220,7 +298,7 @@ Used on: `Custom.AIVerification.Persona`
 | 3 | DEV | Software Developer |
 | 4 | QA | Quality Assurance engineer |
 
-### 3.5 Harness
+### 4.5 Harness
 
 Used on: `Custom.AIVerification.Harness`
 
@@ -229,9 +307,9 @@ Used on: `Custom.AIVerification.Harness`
 | 1 | m365-copilot | Microsoft 365 Copilot (BA/PO, UI/UX) |
 | 2 | github-copilot | GitHub Copilot (DEV, QA) |
 
-### 3.6 AIFoundryModel
+### 4.6 AIFoundryModel
 
-Used on: `Custom.AIStory.ModelUsed`, `Custom.AIVerification.ModelUsed`
+Used on: `Custom.AIStory.ModelUsed`, `Custom.AIVerification.ModelUsed`, `Custom.AIAgentRun.ModelUsed`
 
 | Order | Value | Description |
 |---|---|---|
@@ -240,9 +318,48 @@ Used on: `Custom.AIStory.ModelUsed`, `Custom.AIVerification.ModelUsed`
 | 3 | gpt-4o | GPT-4o (baseline comparison) |
 | 4 | claude-3.5-sonnet | Claude 3.5 Sonnet (baseline comparison) |
 
+### 4.7 AgentName
+
+Used on: `Custom.AIAgentRun.AgentName`
+
+| Order | Value | Description |
+|---|---|---|
+| 1 | Story Decomposer | Decomposes context bundle into stories |
+| 2 | Test Plan Generator | Generates test cases from a story |
+| 3 | Implementation Planner | Produces TDD implementation plan |
+| 4 | Plan Reviewer | Reviews test + impl plan in fresh context |
+| 5 | Coder | Implements code following the plan |
+| 6 | Code Reviewer | Reviews generated code in fresh context |
+| 7 | Test Executor | Runs tests and records results |
+| 8 | Feature Verifier | Validates the assembled feature end-to-end against PRD acceptance criteria |
+| 9 | Orchestrator | Drives pipeline, manages state and revisions |
+
+### 4.8 StageDecision
+
+Used on: `Custom.AIAgentRun.StageDecision`
+
+| Order | Value | Description |
+|---|---|---|
+| 1 | Approved | Agent approved the artifact or output |
+| 2 | Revisions Requested | Artifact sent back to planners for revision |
+| 3 | Changes Requested | Code sent back to coder for fixes |
+| 4 | Completed | Non-review agent completed its output successfully |
+| 5 | Tests Failed | Test Executor reported failures; self-repair loop triggered |
+| 6 | Failed | Agent could not complete; escalation required |
+| 7 | Escalated | Revision limit hit; human intervention required |
+
+### 4.9 TokenSource
+
+Used on: `Custom.AIAgentRun.TokenSource`
+
+| Order | Value | Description |
+|---|---|---|
+| 1 | Reported | Exact counts from model API usage metadata (Azure AI Foundry SDK) |
+| 2 | Estimated | Approximated as characters ÷ 4 (Copilot agent mode does not expose usage) |
+
 ---
 
-## 4. Custom Fields Reference
+## 5. Custom Fields Reference
 
 ### Summary Table
 
@@ -258,6 +375,18 @@ Used on: `Custom.AIStory.ModelUsed`, `Custom.AIVerification.ModelUsed`
 | `Custom.AIStory.RevisionCount` | Integer | — | 0 | — |
 | `Custom.AIStory.AcceptanceCriteria` | HTML | — | — | — |
 | `Custom.AIStory.ParentFeature` | String | — | — | 256 |
+| `Custom.AIStory.TotalCostUSD` | Double | — | 0.0 | — |
+| `Custom.AIStory.PlanRevisionCount` | Integer | — | 0 | — |
+| `Custom.AIStory.CodeRevisionCount` | Integer | — | 0 | — |
+| `Custom.AIStory.ContextBundleScore` | Integer | — | — | — |
+| `Custom.AIStory.TestPlanScore` | Integer | — | — | — |
+| `Custom.AIStory.ImplPlanScore` | Integer | — | — | — |
+| `Custom.AIStory.CodeQualityScore` | Integer | — | — | — |
+| `Custom.AIStory.TestPassRate` | Double | — | — | — |
+| `Custom.AIStory.CodeReviewFindings` | HTML | — | — | — |
+| `Custom.AIStory.TestRevisionCount` | Integer | — | 0 | — |
+| `Custom.AIStory.EstimatedHumanHours` | Double | — | — | — |
+| `Custom.AIStory.PullRequestUrl` | String | — | — | 512 |
 | `Custom.AIVerification.Persona` | String | Persona | — | 32 |
 | `Custom.AIVerification.Harness` | String | Harness | — | 32 |
 | `Custom.AIVerification.FeatureName` | String | — | — | 256 |
@@ -272,12 +401,26 @@ Used on: `Custom.AIStory.ModelUsed`, `Custom.AIVerification.ModelUsed`
 | `Custom.AIVerification.GrillTranscript` | HTML | — | — | — |
 | `Custom.AIVerification.ParentFeature` | String | — | — | 256 |
 | `Custom.AIVerification.TriggeredDocFixes` | HTML | — | — | — |
+| `Custom.AIAgentRun.AgentName` | String | AgentName | — | 64 |
+| `Custom.AIAgentRun.ModelUsed` | String | AIFoundryModel | deepseek-v4-flash | 64 |
+| `Custom.AIAgentRun.InputTokens` | Integer | — | 0 | — |
+| `Custom.AIAgentRun.OutputTokens` | Integer | — | 0 | — |
+| `Custom.AIAgentRun.EstimatedCostUSD` | Double | — | 0.0 | — |
+| `Custom.AIAgentRun.DurationSeconds` | Integer | — | 0 | — |
+| `Custom.AIAgentRun.QualityScore` | Integer | — | — | — |
+| `Custom.AIAgentRun.StageDecision` | String | StageDecision | — | 32 |
+| `Custom.AIAgentRun.RevisionAttempt` | Integer | — | 1 | — |
+| `Custom.AIAgentRun.ArtifactContent` | HTML | — | — | — |
+| `Custom.AIAgentRun.ErrorDetails` | HTML | — | — | — |
+| `Custom.AIAgentRun.ParentStoryTitle` | String | — | — | 256 |
+| `Custom.AIAgentRun.AgentVersion` | String | — | — | 64 |
+| `Custom.AIAgentRun.TokenSource` | String | TokenSource | Estimated | 16 |
 
 ---
 
-## 5. State Machines (Detailed)
+## 6. State Machines (Detailed)
 
-### 5.1 AI Story State Behavior
+### 6.1 AI Story State Behavior
 
 ```yaml
 states:
@@ -340,6 +483,12 @@ states:
     description: Automated tests being executed
     field_rules:
       - TestResults: editable
+      - TestPassRate: editable
+      - TestRevisionCount: editable (incremented by factory on self-repair loop)
+    transitions:
+      - to: Approved (all tests pass)
+      - to: In Coding (tests failed, TestRevisionCount < 2 — self-repair loop)
+      - to: Blocked (tests failed, TestRevisionCount >= 2 — escalation)
 
   Approved:
     category: Resolved
@@ -356,7 +505,7 @@ states:
       - All fields: editable (for reset/remediation)
 ```
 
-### 5.2 AI Verification State Behavior
+### 6.2 AI Verification State Behavior
 
 ```yaml
 states:
@@ -408,15 +557,65 @@ states:
       - SignOffStatus: read-only
 ```
 
+### 6.3 AI Agent Run State Behavior
+
+```yaml
+states:
+  Running:
+    category: InProgress
+    color: "#FFCC00"
+    description: Agent is actively generating output
+    field_rules:
+      - AgentName: required
+      - ModelUsed: required
+      - RevisionAttempt: required
+      - ArtifactContent: hidden
+      - EstimatedCostUSD: hidden
+      - QualityScore: hidden
+      - StageDecision: hidden
+
+  Completed:
+    category: Resolved
+    color: "#00B300"
+    description: Agent finished, artifact and metrics recorded
+    field_rules:
+      - InputTokens: required
+      - OutputTokens: required
+      - EstimatedCostUSD: required
+      - DurationSeconds: required
+      - StageDecision: required
+      - ArtifactContent: optional
+      - QualityScore: required (for Plan Reviewer, Code Reviewer only)
+      - All fields: read-only
+
+  Failed:
+    category: Removed
+    color: "#CC0000"
+    description: Agent failed or escalated
+    field_rules:
+      - ErrorDetails: required
+      - StageDecision: required (value = "Failed" or "Escalated")
+      - InputTokens: optional
+      - OutputTokens: optional
+      - EstimatedCostUSD: optional
+```
+
 ---
 
-## 6. Relationship Model
+## 7. Relationship Model
 
 ```
 Epic (System)
   │
   ├── AI Story (Custom.AIStory) ── "Child" of Epic via System.Parent
   │     │
+  │     ├── AI Agent Run - Story Decomposer  ── "Child" via System.Parent
+  │     ├── AI Agent Run - Test Plan Generator ── "Child" via System.Parent
+  │     ├── AI Agent Run - Implementation Planner ── "Child" via System.Parent
+  │     ├── AI Agent Run - Plan Reviewer (attempt 1..n) ── "Child" via System.Parent
+  │     ├── AI Agent Run - Coder (attempt 1..n) ── "Child" via System.Parent
+  │     ├── AI Agent Run - Code Reviewer (attempt 1..n) ── "Child" via System.Parent
+  │     ├── AI Agent Run - Test Executor ── "Child" via System.Parent
   │     ├── [Related] AI Verification (DEV) via "Story-Verification" link type
   │     └── [Related] AI Verification (QA) via "Story-Verification" link type
   │
@@ -429,18 +628,17 @@ Epic (System)
   ├── AI Verification - DEV (Custom.AIVerification) ── "Child" of Epic
   │     └── [Related] via "Feature-Verification" link type
   │
-  ├── AI Verification - QA (Custom.AIVerification) ── "Child" of Epic
-  │     └── [Related] via "Feature-Verification" link type
-  │
-  └── Task (System) ── "Child" of AI Story
-        └── Implements broken-down factory tasks
+  └── AI Verification - QA (Custom.AIVerification) ── "Child" of Epic
+        └── [Related] via "Feature-Verification" link type
 ```
+
+> **Key principle:** Every AI Agent Run is a child of its parent AI Story, giving instant drill-down from a story's cost/quality summary to the per-agent detail. Board queries on AI Agent Run items across all stories expose factory-wide analytics.
 
 ### Link Types Needed
 
 | Link Type | Topology | Usage |
 |---|---|---|
-| `System.Parent` (built-in) | Hierarchy | Epic → AI Story, Epic → AI Verification, AI Story → Task |
+| `System.Parent` (built-in) | Hierarchy | Epic → AI Story, Epic → AI Verification, AI Story → AI Agent Run |
 | `Custom.VerificationLink` | Related (directed) | AI Story → AI Verification (DEV, QA) |
 | `Custom.VerificationLink` | Related (directed) | Epic → AI Verification (BA/PO, UI/UX) |
 
@@ -449,12 +647,13 @@ Epic (System)
 Each work item title follows this convention:
 - **AI Story:** `[AI] {EpicShortName} - {StoryName}`
 - **AI Verification:** `[Grill] {Persona} - {FeatureName} - {Date}`
+- **AI Agent Run:** `[Run] {AgentName} - {StoryId} - Attempt {N}`
 
 ---
 
-## 7. Form Layout
+## 8. Form Layout
 
-### 7.1 AI Story Form Layout
+### 8.1 AI Story Form Layout
 
 **Group: "Story Details"** (collapsed by default: No)
 - Title (System)
@@ -465,13 +664,24 @@ Each work item title follows this convention:
 - State (System) — shown as state machine bar
 - AI Model Used (picklist)
 - Revision Count (integer)
+- Plan Revision Count (integer)
+- Code Revision Count (integer)
 - Plan Review Status (picklist) — shown conditionally in Plan Review state
 - Code Review Status (picklist) — shown conditionally in Code Review state
 
+**Group: "Observability"** (collapsed by default: No)
+- Total Cost (USD) (double) — read-only, rolled up from child AI Agent Runs
+- Context Bundle Score (integer, 0–100)
+- Test Plan Score (integer, 0–100)
+- Impl Plan Score (integer, 0–100)
+- Code Quality Score (integer, 0–100)
+- Test Pass Rate (double, 0.0–100.0)
+
 **Group: "Factory Artifacts"** (collapsed by default: Yes)
-- Test Plan (HTML)
-- Implementation Plan (HTML)
-- Test Results (HTML)
+- Test Plan (HTML) — written by Test Plan Generator, stored in ADO
+- Implementation Plan (HTML) — written by Implementation Planner, stored in ADO
+- Test Results (HTML) — written by Test Executor, stored in ADO
+- Code Review Findings (HTML) — written by Code Reviewer, stored in ADO
 
 **Group: "Planning"** (collapsed by default: No) — from Basic template
 - Assigned To
@@ -483,7 +693,7 @@ Each work item title follows this convention:
 - Parent Feature (string — read-only, derived from link)
 - All Links
 
-### 7.2 AI Verification Form Layout
+### 8.2 AI Verification Form Layout
 
 **Group: "Session Info"** (collapsed by default: No)
 - Title (System)
@@ -518,24 +728,105 @@ Each work item title follows this convention:
 **Group: "Links"** (collapsed by default: No)
 - All Links
 
+### 8.3 AI Agent Run Form Layout
+
+**Group: "Run Details"** (collapsed by default: No)
+- Title (System) — auto-set by Orchestrator: `[Run] {AgentName} - {StoryId} - Attempt {N}`
+- Agent Name (picklist)
+- Model Used (picklist)
+- Revision Attempt (integer)
+- State (System) — Running / Completed / Failed
+
+**Group: "Cost & Performance"** (collapsed by default: No)
+- Input Tokens (integer)
+- Output Tokens (integer)
+- Estimated Cost (USD) (double)
+- Duration (seconds) (integer)
+
+**Group: "Quality"** (collapsed by default: No)
+- Stage Decision (picklist)
+- Quality Score (integer, 0–100) — visible for Plan Reviewer and Code Reviewer runs only
+- Artifact Content (HTML) — the full output: test plan, impl plan, review, test results
+
+**Group: "Failure Info"** (collapsed by default: Yes)
+- Error Details (HTML) — visible only when State = Failed
+
+**Group: "Links"** (collapsed by default: No)
+- Parent Story Title (string — read-only)
+- All Links
+
 ---
 
-## 8. Pipeline Field Mapping
+## 9. Pipeline Field Mapping (ADO-as-Contract)
 
-### Factory Stage → Field Writes/Reads
+### ADO-as-Contract Principle
 
-| Factory Stage | Writes To | Reads From | Condition |
+**All pipeline artifacts are stored in ADO, not in the repository.** The Orchestrator is responsible for:
+1. Reading context from ADO at the start of each stage
+2. Passing context to sub-agents via prompt injection (not file reads)
+3. Writing sub-agent output to ADO fields at the end of each stage
+4. Creating one `AI Agent Run` work item per sub-agent invocation with full cost and quality metadata
+
+The repository contains only: **code** (committed by the Coder to story branches, merged via PR) and the agent instruction `.agent.md` files. No story artifacts, test plans, implementation plans, or review outputs are committed to git.
+
+### Deterministic Bookkeeping Layer
+
+**The LLM decides; deterministic code writes.** An LLM orchestrator is unreliable at high-volume mechanical bookkeeping — a single silently skipped PATCH corrupts the audit trail the whole system depends on. All ADO reads and writes therefore go through a thin deterministic layer, not through free-form LLM tool calls:
+
+- **Implementation options:** a scripted pipeline runner, or an ADO MCP server (e.g., [microsoft/azure-devops-mcp](https://github.com/microsoft/azure-devops-mcp)) with structured, validated operations
+- The layer exposes typed operations: `create_agent_run()`, `complete_agent_run()`, `write_story_field()`, `transition_story()`, `rollup_cost()`
+- Each operation validates its inputs, retries on transient failure, and fails loudly — never silently
+- The Orchestrator LLM only decides *which* operation to invoke and *what decision* was made; it never constructs raw REST calls
+
+**Integrity check:** At story completion (Approved or Blocked), the bookkeeping layer verifies that every pipeline stage has a corresponding AI Agent Run in a terminal state and that `TotalCostUSD` equals the sum of child run costs. Discrepancies flag the story with the `Audit-Gap` tag for human review.
+
+### Orchestrator Protocol Per Stage
+
+```
+FOR each stage:
+  1. Orchestrator reads input fields from parent AI Story (via bookkeeping layer)
+  2. Orchestrator creates child AI Agent Run WIT → State = Running
+     (records AgentName, ModelUsed, AgentVersion, RevisionAttempt)
+  3. Orchestrator invokes sub-agent, injecting ONLY output artifacts into the prompt
+     — never the Orchestrator's own summaries, opinions, or prior reasoning
+  4. Sub-agent returns output in conversation (not to files)
+  5. Orchestrator captures: output text, token counts, duration
+     - If usage metadata is available (Foundry SDK): TokenSource = Reported
+     - Otherwise: estimate tokens ≈ characters ÷ 4, TokenSource = Estimated
+  6. Orchestrator writes (via bookkeeping layer):
+     a. Artifact to parent AI Story field (e.g., TestPlan, ImplPlan)
+     b. Quality score + decision to AI Story aggregate fields
+     c. AI Agent Run fields: InputTokens, OutputTokens, TokenSource, EstimatedCostUSD,
+        DurationSeconds, QualityScore, StageDecision, ArtifactContent → State = Completed
+  7. Orchestrator updates AI Story state machine
+  8. Orchestrator updates AI Story.TotalCostUSD (running sum)
+```
+
+> **Token capture reality check:** GitHub Copilot agent mode does not expose token usage metadata. Until pipeline execution moves to a scripted harness calling Azure AI Foundry APIs directly (which return exact `usage` data), all counts will be `TokenSource = Estimated`. Estimation is acceptable for A/B model comparison **as long as both sides of the comparison use the same source** — never compare Estimated runs against Reported runs.
+
+### Factory Stage → ADO Field Writes/Reads
+
+| Factory Stage | Reads From ADO | Writes To ADO | AI Agent Run Created |
 |---|---|---|---|
-| **Story Decomposer** | `AI Story.StoryContext`, `AI Story.AcceptanceCriteria`, `AI Story.ModelUsed`, `AI Story.RevisionCount = 0`, sets State = Drafted | Epic (via Parent link) | Upon Epic approval |
-| **Test Plan Generator** | `AI Story.TestPlan`, sets State = In Planning | `AI Story.StoryContext`, `AI Story.AcceptanceCriteria` | From Drafted |
-| **Plan Generator** | `AI Story.ImplPlan`, sets State = Plan Review | `AI Story.StoryContext`, `AI Story.TestPlan` | From In Planning |
-| **Plan Reviewer** | Reads `AI Story.ImplPlan`, writes `AI Story.PlanReviewStatus` | If Approved → sets State = In Coding; if Revisions Requested → increments `AI Story.RevisionCount`, sets State = In Planning | |
-| **Code Generator** | Sets State = In Coding | `AI Story.StoryContext`, `AI Story.ImplPlan` | Writes code to repo |
-| **Code Reviewer** | Writes `AI Story.CodeReviewStatus` | Implementation plan, generated code | If Approved → State = In Testing; if Changes Requested → incr `AI Story.RevisionCount`, State = In Coding |
-| **Test Executor** | Writes `AI Story.TestResults`, sets State = In Testing | `AI Story.TestPlan`, code | |
-| **Gate Checker** | If all pass → State = Approved; If `AI Story.RevisionCount > 2` → State = Blocked | `AI Story.TestResults`, `AI Story.RevisionCount` | |
+| **Story Decomposer** | Epic description + parent context bundle fields | `AI Story.StoryContext`, `AI Story.AcceptanceCriteria`, `AI Story.ModelUsed`, `AI Story.ContextBundleScore`, `AI Story.EstimatedHumanHours`, State = Drafted | Yes — per story |
+| **Test Plan Generator** | `AI Story.StoryContext`, `AI Story.AcceptanceCriteria` | `AI Story.TestPlan`, State = In Planning | Yes |
+| **Implementation Planner** | `AI Story.StoryContext`, `AI Story.TestPlan` | `AI Story.ImplPlan`, State = Plan Review | Yes |
+| **Plan Reviewer** | `AI Story.ImplPlan`, `AI Story.TestPlan`; on re-review also the previous review artifact | `AI Story.PlanReviewStatus`, `AI Story.TestPlanScore`, `AI Story.ImplPlanScore`; if Approved → State = In Coding; if Revisions → incr `PlanRevisionCount`, State = In Planning | Yes |
+| **Coder** | `AI Story.ImplPlan`, `AI Story.StoryContext`; on self-repair loop also `AI Story.TestResults` | `AI Story.PullRequestUrl`, State = Code Review *(code committed to `story/{id}` branch, PR opened)* | Yes |
+| **Code Reviewer** | `AI Story.ImplPlan`, `AI Story.TestPlan`, PR diff from repo; on re-review also previous findings | `AI Story.CodeReviewStatus`, `AI Story.CodeQualityScore`, `AI Story.CodeReviewFindings`; if Approved → State = In Testing; if Changes → incr `CodeRevisionCount`, State = In Coding | Yes |
+| **Test Executor** | `AI Story.TestPlan`, code in repo | `AI Story.TestResults`, `AI Story.TestPassRate`, State = In Testing | Yes |
+| **Gate Checker (Orchestrator)** | `AI Story.TestResults`, `AI Story.TestPassRate`, revision counters | If all pass → State = Approved; if tests failed and `TestRevisionCount` < 2 → incr `TestRevisionCount`, State = In Coding (self-repair); if any counter ≥ 2 → State = Blocked | No separate run — Orchestrator logic |
+| **Feature Verifier** | Epic PRD acceptance criteria + all child story states | Epic-level feature verification results (as Epic field or linked test results); runs once after ALL child stories reach Approved | Yes — parented to Epic |
 
-### Grill Me Stage → Field Writes
+### Cost Roll-Up
+
+After each AI Agent Run is completed, the Orchestrator:
+1. Reads all child AI Agent Run `EstimatedCostUSD` values for the parent AI Story
+2. Sums them and writes the total to `AI Story.TotalCostUSD`
+
+This gives instant cost visibility at the story level and enables cross-story cost queries.
+
+### Grill Me Stage → ADO Field Writes
 
 | Grill Stage | Writes To | Notes |
 |---|---|---|
@@ -550,7 +841,181 @@ Each work item title follows this convention:
 
 ---
 
-## 9. Implementation Steps
+## 10. Model Pricing Reference
+
+Use these rates to calculate `EstimatedCostUSD` in AI Agent Run items. Prices are approximate — verify against the current Azure AI Foundry pricing page before use. All rates are per **1,000 tokens**.
+
+| Model | Input ($/1K tokens) | Output ($/1K tokens) | Notes |
+|---|---|---|---|
+| `deepseek-v4-flash` | $0.000270 | $0.001100 | Default for most stages; fast and cheap |
+| `deepseek-v4-pro` | $0.000270 | $0.001100 | Use for Plan Reviewer, Code Reviewer for higher accuracy |
+| `gpt-4o` | $0.002500 | $0.010000 | Baseline comparison; ~10× cost of DeepSeek Flash |
+| `claude-3.5-sonnet` | $0.003000 | $0.015000 | Baseline comparison; highest output cost |
+
+### Cost Calculation Formula
+
+```
+EstimatedCostUSD = (InputTokens / 1000 × price_in) + (OutputTokens / 1000 × price_out)
+```
+
+**Example:** Plan Reviewer using `deepseek-v4-pro`, 8,000 input tokens, 1,200 output tokens:
+```
+= (8000 / 1000 × 0.000270) + (1200 / 1000 × 0.001100)
+= 0.00216 + 0.00132
+= $0.00348
+```
+
+### Recommended Model Assignment Per Stage
+
+| Agent | Recommended Model | Rationale |
+|---|---|---|
+| Story Decomposer | deepseek-v4-flash | High throughput, decomposition is structured |
+| Test Plan Generator | deepseek-v4-flash | Formulaic output, fast iteration |
+| Implementation Planner | deepseek-v4-pro | Complex reasoning, architecture compliance |
+| Plan Reviewer | deepseek-v4-pro | Critical quality gate, fresh-context review |
+| Coder | deepseek-v4-flash | Mechanical execution of plan |
+| Code Reviewer | deepseek-v4-pro | Critical quality gate, security/SOLID review |
+| Test Executor | deepseek-v4-flash | Output is build/test results, not reasoning |
+
+> **Model Swap Guidance:** When changing models, compare `ImplPlanScore`, `CodeQualityScore`, and `TestPassRate` across runs using the Observability Queries in Section 11. Cost per story (`TotalCostUSD`) is the efficiency metric; quality scores are the value metric.
+
+### Measurement Calibration Rules
+
+Self-reported LLM quality scores are only meaningful if the measurement instrument is controlled:
+
+1. **Pin the reviewer model.** When A/B testing generator models (Planner, Coder), the reviewer model stays **constant** — otherwise the grader changes along with the gradee and the comparison is meaningless. Reviewer model changes are their own separate, deliberate experiments.
+2. **Use a different model family for reviewers than generators.** Same-family reviewer and generator share blind spots; fresh context protects against anchoring, not against shared model priors.
+3. **Anchor scores with rubrics.** The Plan Reviewer and Code Reviewer agent files define explicit scoring rubrics (what makes a 90 vs. a 60). Unanchored 0–100 scores drift and are not comparable across sessions.
+4. **Objective metrics are ground truth.** `TestPassRate`, revision counts, and escaped defects found post-approval are the authoritative quality signal. Self-reported scores are leading indicators only — never make a model-swap decision on scores alone.
+5. **Track `AgentVersion`.** When prompt tuning and model changes happen in the same period, the `AgentVersion` field on AI Agent Run is what allows attributing quality movement to the right cause. Change one variable at a time.
+
+---
+
+## 11. Observability Analytics
+
+### 11.1 Purpose
+
+The AI Agent Run work items, combined with aggregate fields on AI Story, enable **continuous factory improvement** through ADO queries and dashboards. The goal is to answer:
+
+- Which model gives the best cost/quality ratio per stage?
+- Which agent generates the most revisions? (quality bottleneck)
+- What is the average cost to produce an approved story?
+- Which stories are most expensive? (complexity signal)
+- Is quality improving over time?
+
+### 11.2 ADO Query Templates
+
+The following WIQL queries can be saved as ADO Shared Queries and pinned to dashboards.
+
+#### Cost by Model — All Runs
+
+```sql
+SELECT [System.Title], [Custom.AIAgentRun.ModelUsed],
+       [Custom.AIAgentRun.AgentName], [Custom.AIAgentRun.InputTokens],
+       [Custom.AIAgentRun.OutputTokens], [Custom.AIAgentRun.EstimatedCostUSD]
+FROM WorkItems
+WHERE [System.WorkItemType] = 'AI Agent Run'
+ORDER BY [Custom.AIAgentRun.ModelUsed], [Custom.AIAgentRun.EstimatedCostUSD] DESC
+```
+
+#### Average Quality Score by Agent
+
+```sql
+SELECT [Custom.AIAgentRun.AgentName], [Custom.AIAgentRun.QualityScore],
+       [Custom.AIAgentRun.StageDecision]
+FROM WorkItems
+WHERE [System.WorkItemType] = 'AI Agent Run'
+  AND [Custom.AIAgentRun.QualityScore] <> ''
+ORDER BY [Custom.AIAgentRun.AgentName]
+```
+
+#### Stories with High Revision Counts (Bottleneck Detection)
+
+```sql
+SELECT [System.Title], [Custom.AIStory.PlanRevisionCount],
+       [Custom.AIStory.CodeRevisionCount], [Custom.AIStory.TotalCostUSD]
+FROM WorkItems
+WHERE [System.WorkItemType] = 'AI Story'
+  AND ([Custom.AIStory.PlanRevisionCount] > 0
+       OR [Custom.AIStory.CodeRevisionCount] > 0)
+ORDER BY [Custom.AIStory.TotalCostUSD] DESC
+```
+
+#### Story Cost Summary — Approved Stories Only
+
+```sql
+SELECT [System.Title], [Custom.AIStory.TotalCostUSD],
+       [Custom.AIStory.ModelUsed], [Custom.AIStory.TestPassRate],
+       [Custom.AIStory.CodeQualityScore]
+FROM WorkItems
+WHERE [System.WorkItemType] = 'AI Story'
+  AND [System.State] = 'Approved'
+ORDER BY [Custom.AIStory.TotalCostUSD] DESC
+```
+
+#### Failed Runs — Escalation Analysis
+
+```sql
+SELECT [System.Title], [Custom.AIAgentRun.AgentName],
+       [Custom.AIAgentRun.ErrorDetails], [Custom.AIAgentRun.RevisionAttempt]
+FROM WorkItems
+WHERE [System.WorkItemType] = 'AI Agent Run'
+  AND [System.State] = 'Failed'
+ORDER BY [System.ChangedDate] DESC
+```
+
+### 11.3 Dashboard Widgets
+
+Recommended ADO Dashboard for factory observability:
+
+| Widget | Query | Chart Type |
+|---|---|---|
+| **Stories in Pipeline** | Count of AI Stories by State | Stacked bar (state distribution) |
+| **Cost This Sprint** | Sum of AI Story.TotalCostUSD, current iteration | Number tile |
+| **Avg Cost per Approved Story** | AVG TotalCostUSD where State = Approved | Number tile |
+| **Quality Scores by Stage** | Avg QualityScore per AgentName | Bar chart |
+| **Revision Rate** | Count of AI Stories where PlanRevisionCount > 0 or CodeRevisionCount > 0 | Pie chart |
+| **Model Cost Comparison** | Sum EstimatedCostUSD grouped by ModelUsed | Bar chart |
+| **Blocked Stories** | Count of AI Stories where State = Blocked | Number tile (red) |
+| **Test Pass Rate Trend** | AI Story.TestPassRate over time | Line chart |
+
+### 11.4 Model Comparison Workflow
+
+To evaluate whether switching a stage to a different model improves cost/quality:
+
+1. Run a batch of stories using Model A for the target stage
+2. Note `QualityScore` and `EstimatedCostUSD` on the AI Agent Run items
+3. Switch the Orchestrator to Model B for that stage only — **keep the reviewer model and `AgentVersion` fixed** (see Measurement Calibration Rules, Section 10)
+4. Run the same batch of stories
+5. Compare: average `QualityScore`, average `EstimatedCostUSD`, revision-count impact, and — most importantly — `TestPassRate` (the objective ground truth)
+6. Verify both batches have the same `TokenSource` (never compare Estimated against Reported)
+7. Update the recommended model assignment in Section 10 and the Orchestrator config
+
+### 11.5 Cost-vs-Value Baseline
+
+Cost data is only meaningful to stakeholders against an anchor. The Story Decomposer sets `EstimatedHumanHours` on every story at creation. Dashboard tile:
+
+```
+Value ratio = (Σ EstimatedHumanHours × loaded hourly rate) / Σ TotalCostUSD
+```
+
+This is a rough anchor, not an accounting truth — but it turns "the factory spent $47 this sprint" into "the factory spent $47 to produce an estimated $12,000 of engineering work," which is the sentence executives need.
+
+### 11.6 Board Hygiene
+
+10 stories × ~8 agent runs × revision retries ≈ 100+ AI Agent Run work items per feature. To keep team boards usable:
+
+- Place all AI Agent Run items in a dedicated area path (e.g., `{Project}\Factory\Runs`)
+- Exclude that area path from team backlogs and boards
+- AI Agent Run items exist for queries, dashboards, and audit — not for standups
+
+### 11.7 Tuning Loop Limits
+
+The max-2 revision limits are a starting guess, not doctrine. Per-stage limits are a **tunable output** of this analytics layer: e.g., if the data shows Plan Review loop 2 almost never converges, reduce that stage's limit to 1 and escalate earlier — it's cheaper. Revisit limits quarterly using the bottleneck-detection query (11.2).
+
+---
+
+## 12. Implementation Steps
 
 ### Phase 1: Create Custom Fields (in order)
 
@@ -567,24 +1032,27 @@ These must be created BEFORE the work item types that use them.
 
 | Step | Action | API Endpoint | Method |
 |---|---|---|---|
-| 1 | Create picklists (PlanReviewStatus, CodeReviewStatus, SignOffStatus, Persona, Harness, AIFoundryModel) | `POST /_apis/work/processes/{processId}/lists` | POST |
-| 2 | Create plain string fields (PlanReviewStatus, CodeReviewStatus, ModelUsed, Persona, Harness, FeatureName, ParentFeature) | `POST /_apis/work/processes/{processId}/fields` | POST |
-| 3 | Create HTML fields (StoryContext, TestPlan, ImplPlan, TestResults, AcceptanceCriteria, MisconceptionDetails, GrillTranscript, TriggeredDocFixes) | `POST /_apis/work/processes/{processId}/fields` | POST |
-| 4 | Create integer fields (QuestionsAsked, FullyCorrect, MinorGaps, MajorMisunderstandings, RevisionCount) | `POST /_apis/work/processes/{processId}/fields` | POST |
-| 5 | Create DateTime field (GrillDate) | `POST /_apis/work/processes/{processId}/fields` | POST |
-| 6 | Create work item type "AI Story" | `POST /_apis/work/processes/{processId}/workItemTypes` | POST |
-| 7 | Create work item type "AI Verification" | `POST /_apis/work/processes/{processId}/workItemTypes` | POST |
-| 8 | Add states to AI Story | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states` | POST |
-| 9 | Add states to AI Verification | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states` | POST |
-| 10 | Add field-to-WIT mappings (field instances) | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields` | POST |
-| 11 | Add state transition rules | `PATCH /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states/{stateId}` | PATCH |
-| 12 | Configure form layouts | `PATCH /_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout` | PATCH |
+| 1 | Create picklists (PlanReviewStatus, CodeReviewStatus, SignOffStatus, Persona, Harness, AIFoundryModel, AgentName, StageDecision, TokenSource) | `POST /_apis/work/processes/{processId}/lists` | POST |
+| 2 | Create plain string fields (PlanReviewStatus, CodeReviewStatus, ModelUsed, Persona, Harness, FeatureName, ParentFeature, AgentName, StageDecision, ParentStoryTitle, AgentVersion, TokenSource, PullRequestUrl) | `POST /_apis/work/processes/{processId}/fields` | POST |
+| 3 | Create HTML fields (StoryContext, TestPlan, ImplPlan, TestResults, AcceptanceCriteria, MisconceptionDetails, GrillTranscript, TriggeredDocFixes, ArtifactContent, ErrorDetails, CodeReviewFindings) | `POST /_apis/work/processes/{processId}/fields` | POST |
+| 4 | Create integer fields (QuestionsAsked, FullyCorrect, MinorGaps, MajorMisunderstandings, RevisionCount, PlanRevisionCount, CodeRevisionCount, TestRevisionCount, InputTokens, OutputTokens, DurationSeconds, QualityScore, RevisionAttempt, ContextBundleScore, TestPlanScore, ImplPlanScore, CodeQualityScore) | `POST /_apis/work/processes/{processId}/fields` | POST |
+| 5 | Create double fields (TotalCostUSD, EstimatedCostUSD, TestPassRate, EstimatedHumanHours) | `POST /_apis/work/processes/{processId}/fields` | POST |
+| 6 | Create DateTime field (GrillDate) | `POST /_apis/work/processes/{processId}/fields` | POST |
+| 7 | Create work item type "AI Story" | `POST /_apis/work/processes/{processId}/workItemTypes` | POST |
+| 8 | Create work item type "AI Verification" | `POST /_apis/work/processes/{processId}/workItemTypes` | POST |
+| 9 | Create work item type "AI Agent Run" | `POST /_apis/work/processes/{processId}/workItemTypes` | POST |
+| 10 | Add states to AI Story | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states` | POST |
+| 11 | Add states to AI Verification | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states` | POST |
+| 12 | Add states to AI Agent Run (Running, Completed, Failed) | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states` | POST |
+| 13 | Add field-to-WIT mappings (field instances) | `POST /_apis/work/processes/{processId}/workItemTypes/{witRefName}/fields` | POST |
+| 14 | Add state transition rules | `PATCH /_apis/work/processes/{processId}/workItemTypes/{witRefName}/states/{stateId}` | PATCH |
+| 15 | Configure form layouts | `PATCH /_apis/work/processes/{processId}/workItemTypes/{witRefName}/layout` | PATCH |
 
 ---
 
-## 10. REST API Payloads
+## 13. REST API Payloads
 
-### 10.1 Authentication
+### 13.1 Authentication
 
 ```bash
 # Using Personal Access Token (PAT)
@@ -607,7 +1075,7 @@ invoke_api() {
 }
 ```
 
-### 10.2 Create Picklists (Global Lists)
+### 13.2 Create Picklists (Global Lists)
 
 ```json
 // POST /_apis/work/processes/{processId}/lists?api-version=7.1-preview.1
@@ -669,9 +1137,38 @@ invoke_api() {
     { "value": "claude-3.5-sonnet" }
   ]
 }
+
+// AgentName
+{
+  "name": "AgentName",
+  "items": [
+    { "value": "Story Decomposer" },
+    { "value": "Test Plan Generator" },
+    { "value": "Implementation Planner" },
+    { "value": "Plan Reviewer" },
+    { "value": "Coder" },
+    { "value": "Code Reviewer" },
+    { "value": "Test Executor" },
+    { "value": "Feature Verifier" },
+    { "value": "Orchestrator" }
+  ]
+}
+
+// StageDecision
+{
+  "name": "StageDecision",
+  "items": [
+    { "value": "Approved" },
+    { "value": "Revisions Requested" },
+    { "value": "Changes Requested" },
+    { "value": "Completed" },
+    { "value": "Failed" },
+    { "value": "Escalated" }
+  ]
+}
 ```
 
-### 10.3 Create Fields
+### 13.3 Create Fields
 
 ```json
 // POST /_apis/work/processes/{processId}/fields?api-version=7.1-preview.1
@@ -710,7 +1207,7 @@ invoke_api() {
 }
 ```
 
-### 10.4 Create Work Item Types
+### 13.4 Create Work Item Types
 
 ```json
 // POST /_apis/work/processes/{processId}/workItemTypes?api-version=7.1-preview.1
@@ -736,9 +1233,20 @@ invoke_api() {
     "workItemTypeReferenceName": "Microsoft.VSTS.WorkItemTypes.Issue"
   }
 }
+
+// AI Agent Run
+{
+  "name": "AI Agent Run",
+  "description": "Records a single AI agent invocation with cost, model, tokens, quality score, and output artifact",
+  "color": "005A9E",
+  "icon": "icon-gear",
+  "inherits": {
+    "workItemTypeReferenceName": "Microsoft.VSTS.WorkItemTypes.Issue"
+  }
+}
 ```
 
-### 10.5 Add States to AI Story
+### 13.5 Add States to AI Story
 
 ```json
 // POST /_apis/work/processes/{processId}/workItemTypes/Custom.AIStory/states?api-version=7.1-preview.1
@@ -755,7 +1263,7 @@ invoke_api() {
 ]
 ```
 
-### 10.6 Add States to AI Verification
+### 13.6 Add States to AI Verification
 
 ```json
 // POST /_apis/work/processes/{processId}/workItemTypes/Custom.AIVerification/states?api-version=7.1-preview.1
@@ -768,11 +1276,23 @@ invoke_api() {
 ]
 ```
 
+### 13.7 Add States to AI Agent Run
+
+```json
+// POST /_apis/work/processes/{processId}/workItemTypes/Custom.AIAgentRun/states?api-version=7.1-preview.1
+
+[
+  { "name": "Running", "color": "FFCC00", "stateCategory": "InProgress" },
+  { "name": "Completed", "color": "00B300", "stateCategory": "Resolved" },
+  { "name": "Failed", "color": "CC0000", "stateCategory": "Removed" }
+]
+```
+
 ---
 
 ## Implementation Script
 
-See companion file: `/home/merlin/ado_setup_factory.py`
+See companion file: `ado/setup.py`
 
 This Python script implements the entire design above using the Azure DevOps REST API (version 7.1-preview.1), with:
 - Full error handling and retry logic
@@ -780,7 +1300,7 @@ This Python script implements the entire design above using the Azure DevOps RES
 - Verification steps after each phase
 - A dry-run mode for previewing changes
 
-
+> **Note:** `setup.py` implements the full design in this revision, including the `AI Agent Run` work item type, the `AgentName`/`StageDecision`/`TokenSource` picklists, and all observability fields. Run with `--dry-run` to preview.
 
 ---
 

@@ -2,8 +2,9 @@
 """
 Azure DevOps Work Item Type Setup: AI Software Factory
 
-Creates custom work item types "AI Story" and "AI Verification" with all
-custom fields, picklists, states, transitions, and form layouts.
+Creates custom work item types "AI Story", "AI Verification", and
+"AI Agent Run" with all custom fields, picklists, states, transitions,
+and form layouts.
 
 Usage:
   export AZURE_DEVOPS_PAT="<your-pat>"
@@ -162,6 +163,39 @@ PICKLISTS = {
             {"value": "claude-3.5-sonnet"},
         ],
     },
+    "AgentName": {
+        "name": "AgentName",
+        "items": [
+            {"value": "Story Decomposer"},
+            {"value": "Test Plan Generator"},
+            {"value": "Implementation Planner"},
+            {"value": "Plan Reviewer"},
+            {"value": "Coder"},
+            {"value": "Code Reviewer"},
+            {"value": "Test Executor"},
+            {"value": "Feature Verifier"},
+            {"value": "Orchestrator"},
+        ],
+    },
+    "StageDecision": {
+        "name": "StageDecision",
+        "items": [
+            {"value": "Approved"},
+            {"value": "Revisions Requested"},
+            {"value": "Changes Requested"},
+            {"value": "Completed"},
+            {"value": "Tests Failed"},
+            {"value": "Failed"},
+            {"value": "Escalated"},
+        ],
+    },
+    "TokenSource": {
+        "name": "TokenSource",
+        "items": [
+            {"value": "Reported"},
+            {"value": "Estimated"},
+        ],
+    },
 }
 
 # Fields definition: (ref_name, name, type, picklist_name_or_none, description)
@@ -187,6 +221,30 @@ ALL_FIELDS = [
      "Given/When/Then formatted acceptance criteria"),
     ("Custom.AIStory.ParentFeature", "Parent Feature", "string", None,
      "Title of the parent Epic"),
+    ("Custom.AIStory.TotalCostUSD", "Total Cost (USD)", "double", None,
+     "Sum of all child AI Agent Run EstimatedCostUSD values"),
+    ("Custom.AIStory.PlanRevisionCount", "Plan Revision Count", "integer", None,
+     "Number of plan revision loops (max 2)"),
+    ("Custom.AIStory.CodeRevisionCount", "Code Revision Count", "integer", None,
+     "Number of code revision loops (max 2)"),
+    ("Custom.AIStory.TestRevisionCount", "Test Revision Count", "integer", None,
+     "Number of test-failure self-repair loops (max 2)"),
+    ("Custom.AIStory.ContextBundleScore", "Context Bundle Score", "integer", None,
+     "Quality score of input context bundle (0-100), set by Story Decomposer"),
+    ("Custom.AIStory.TestPlanScore", "Test Plan Score", "integer", None,
+     "Quality score of generated test plan (0-100), set by Plan Reviewer"),
+    ("Custom.AIStory.ImplPlanScore", "Impl Plan Score", "integer", None,
+     "Quality score of implementation plan (0-100), set by Plan Reviewer"),
+    ("Custom.AIStory.CodeQualityScore", "Code Quality Score", "integer", None,
+     "Final code review score (0-100), set by Code Reviewer"),
+    ("Custom.AIStory.TestPassRate", "Test Pass Rate", "double", None,
+     "Percentage of tests that passed (0.0-100.0), set by Test Executor"),
+    ("Custom.AIStory.CodeReviewFindings", "Code Review Findings", "html", None,
+     "Structured list of findings from Code Reviewer (violations, severity)"),
+    ("Custom.AIStory.EstimatedHumanHours", "Estimated Human Hours", "double", None,
+     "Rough estimate of human effort this story would have required"),
+    ("Custom.AIStory.PullRequestUrl", "Pull Request URL", "string", None,
+     "Link to the story branch PR opened by the Coder"),
 
     # ── AI Verification fields ──
     ("Custom.AIVerification.Persona", "Persona", "string", "Persona",
@@ -221,6 +279,36 @@ ALL_FIELDS = [
     ("Custom.AIVerification.TriggeredDocFixes",
      "Triggered Document Fixes", "html", None,
      "Which documents/sections were modified as a result of this grill"),
+
+    # ── AI Agent Run fields ──
+    ("Custom.AIAgentRun.AgentName", "Agent Name", "string", "AgentName",
+     "Which agent was invoked"),
+    ("Custom.AIAgentRun.ModelUsed", "Model Used", "string", "AIFoundryModel",
+     "AI model that processed this run"),
+    ("Custom.AIAgentRun.InputTokens", "Input Tokens", "integer", None,
+     "Prompt tokens consumed"),
+    ("Custom.AIAgentRun.OutputTokens", "Output Tokens", "integer", None,
+     "Completion tokens generated"),
+    ("Custom.AIAgentRun.EstimatedCostUSD", "Estimated Cost (USD)", "double", None,
+     "Calculated: (InputTokens x price_in) + (OutputTokens x price_out)"),
+    ("Custom.AIAgentRun.DurationSeconds", "Duration (seconds)", "integer", None,
+     "Wall-clock seconds from invocation to completion"),
+    ("Custom.AIAgentRun.QualityScore", "Quality Score", "integer", None,
+     "Rubric-anchored 0-100 score (Plan Reviewer, Code Reviewer runs)"),
+    ("Custom.AIAgentRun.StageDecision", "Stage Decision", "string", "StageDecision",
+     "The verdict this run produced"),
+    ("Custom.AIAgentRun.RevisionAttempt", "Revision Attempt", "integer", None,
+     "Which attempt this is (1 = first run)"),
+    ("Custom.AIAgentRun.ArtifactContent", "Artifact Content", "html", None,
+     "The full output artifact (test plan, impl plan, review, test results)"),
+    ("Custom.AIAgentRun.ErrorDetails", "Error Details", "html", None,
+     "If Failed: full error description and recommended action"),
+    ("Custom.AIAgentRun.ParentStoryTitle", "Parent Story Title", "string", None,
+     "Denormalized title of the parent AI Story for cross-story queries"),
+    ("Custom.AIAgentRun.AgentVersion", "Agent Version", "string", None,
+     "Version/hash of the agent instruction file used for this run"),
+    ("Custom.AIAgentRun.TokenSource", "Token Source", "string", "TokenSource",
+     "Whether token counts are Reported (exact) or Estimated (chars/4)"),
 ]
 
 # Work Item Types to create
@@ -242,6 +330,12 @@ AI_VER_STATES = [
     {"name": "Needs Revision",  "color": "CC0000", "stateCategory": "Removed"},
 ]
 
+AI_RUN_STATES = [
+    {"name": "Running",   "color": "FFCC00", "stateCategory": "InProgress"},
+    {"name": "Completed", "color": "00B300", "stateCategory": "Resolved"},
+    {"name": "Failed",    "color": "CC0000", "stateCategory": "Removed"},
+]
+
 # Fields per WIT: (ref_name, required, default_value, help_text)
 AI_STORY_FIELDS = [
     ("Custom.AIStory.StoryContext", True, None, "Full context from the decomposer"),
@@ -254,6 +348,18 @@ AI_STORY_FIELDS = [
     ("Custom.AIStory.CodeReviewStatus", False, None, "Code review decision"),
     ("Custom.AIStory.TestResults", False, None, "Test execution results"),
     ("Custom.AIStory.ParentFeature", False, None, "Parent Epic title"),
+    ("Custom.AIStory.TotalCostUSD", False, "0", "Total cost rolled up from Agent Runs"),
+    ("Custom.AIStory.PlanRevisionCount", False, "0", "Plan revision loop counter"),
+    ("Custom.AIStory.CodeRevisionCount", False, "0", "Code revision loop counter"),
+    ("Custom.AIStory.TestRevisionCount", False, "0", "Test self-repair loop counter"),
+    ("Custom.AIStory.ContextBundleScore", False, None, "Context bundle quality (0-100)"),
+    ("Custom.AIStory.TestPlanScore", False, None, "Test plan quality (0-100)"),
+    ("Custom.AIStory.ImplPlanScore", False, None, "Impl plan quality (0-100)"),
+    ("Custom.AIStory.CodeQualityScore", False, None, "Code review score (0-100)"),
+    ("Custom.AIStory.TestPassRate", False, None, "Test pass percentage"),
+    ("Custom.AIStory.CodeReviewFindings", False, None, "Code review findings"),
+    ("Custom.AIStory.EstimatedHumanHours", False, None, "Estimated human effort (hours)"),
+    ("Custom.AIStory.PullRequestUrl", False, None, "Story branch PR URL"),
 ]
 
 AI_VER_FIELDS = [
@@ -271,6 +377,23 @@ AI_VER_FIELDS = [
     ("Custom.AIVerification.GrillTranscript", False, None, "Full Q&A log"),
     ("Custom.AIVerification.ParentFeature", False, None, "Parent Epic title"),
     ("Custom.AIVerification.TriggeredDocFixes", False, None, "Documents modified"),
+]
+
+AI_RUN_FIELDS = [
+    ("Custom.AIAgentRun.AgentName", True, None, "Which agent was invoked"),
+    ("Custom.AIAgentRun.ModelUsed", True, "deepseek-v4-flash", "AI model for this run"),
+    ("Custom.AIAgentRun.AgentVersion", False, None, "Agent instruction file version/hash"),
+    ("Custom.AIAgentRun.RevisionAttempt", True, "1", "Attempt number (1 = first)"),
+    ("Custom.AIAgentRun.InputTokens", False, "0", "Prompt tokens consumed"),
+    ("Custom.AIAgentRun.OutputTokens", False, "0", "Completion tokens generated"),
+    ("Custom.AIAgentRun.TokenSource", False, "Estimated", "Reported (exact) or Estimated"),
+    ("Custom.AIAgentRun.EstimatedCostUSD", False, "0", "Calculated run cost"),
+    ("Custom.AIAgentRun.DurationSeconds", False, "0", "Wall-clock duration"),
+    ("Custom.AIAgentRun.QualityScore", False, None, "Rubric-anchored score (reviewers)"),
+    ("Custom.AIAgentRun.StageDecision", False, None, "The verdict this run produced"),
+    ("Custom.AIAgentRun.ArtifactContent", False, None, "Full output artifact"),
+    ("Custom.AIAgentRun.ErrorDetails", False, None, "Error details if Failed"),
+    ("Custom.AIAgentRun.ParentStoryTitle", False, None, "Parent AI Story title"),
 ]
 
 
@@ -363,6 +486,61 @@ def delete_picklists(picklist_ids):
     log.info("Picklist cleanup complete.")
 
 
+def create_fields(picklist_ids):
+    """
+    Phase 1b: Create typed custom fields via the Process Fields API.
+
+    Endpoint: POST https://dev.azure.com/{org}/_apis/work/processes/{processId}/fields
+
+    This must run BEFORE add_field_instances: the field-instance endpoint
+    binds existing fields to a WIT but cannot itself create fields with
+    the correct type (double, dateTime) or picklist bindings.
+    """
+    step("Phase 1b: Creating Typed Custom Fields")
+
+    if DRY_RUN:
+        for ref, name, ftype, picklist, desc in ALL_FIELDS:
+            pl = f", picklist={picklist}" if picklist else ""
+            log.info("  [DRY-RUN] POST .../%s/fields -> %s (%s%s)",
+                      PROCESS_ID, ref, ftype, pl)
+        return
+
+    existing = api_process("GET", f"/{PROCESS_ID}/fields")
+    existing_refs = set()
+    if existing and "value" in existing:
+        for f in existing["value"]:
+            existing_refs.add(f.get("referenceName"))
+
+    log.info("Existing custom fields: %d", len(existing_refs))
+
+    for ref, name, ftype, picklist, desc in ALL_FIELDS:
+        if ref in existing_refs:
+            log.info("  [SKIP] Field '%s' already exists", ref)
+            continue
+
+        body = {
+            "name": name,
+            "referenceName": ref,
+            "type": ftype,
+            "description": desc,
+        }
+        if picklist:
+            pl_id = picklist_ids.get(picklist)
+            if not pl_id or pl_id == "<dryrun-id>":
+                log.warning("  Picklist '%s' has no id; creating '%s' without binding",
+                             picklist, ref)
+            else:
+                body["pickList"] = {"id": pl_id}
+
+        log.info("  Creating field '%s' (%s)...", ref, ftype)
+        result = api_process("POST", f"/{PROCESS_ID}/fields", body)
+        if result:
+            log.info("    Created! %s", result.get("referenceName"))
+        else:
+            log.warning("    Failed to create field '%s'", ref)
+        time.sleep(0.3)
+
+
 def create_work_item_types():
     """
     Phase 2: Create the two custom work item types.
@@ -383,6 +561,12 @@ def create_work_item_types():
             "description": "Records a Grill Me comprehension verification session. One per persona (BA/PO, UI/UX, DEV, QA) per feature. States: Pending -> In Progress -> Completed | Needs Revision.",
             "color": "339933",
             "icon": "icon-check",
+        },
+        {
+            "name": "AI Agent Run",
+            "description": "Records a single AI agent invocation with cost, model, tokens, quality score, and output artifact. One per sub-agent call, child of AI Story. States: Running -> Completed | Failed.",
+            "color": "005A9E",
+            "icon": "icon-gear",
         },
     ]
 
@@ -427,6 +611,7 @@ def add_states():
     wits_and_states = [
         ("Custom.AIStory", AI_STORY_STATES),
         ("Custom.AIVerification", AI_VER_STATES),
+        ("Custom.AIAgentRun", AI_RUN_STATES),
     ]
 
     if DRY_RUN:
@@ -485,6 +670,7 @@ def add_field_instances():
     wits_and_fields = [
         ("Custom.AIStory", AI_STORY_FIELDS),
         ("Custom.AIVerification", AI_VER_FIELDS),
+        ("Custom.AIAgentRun", AI_RUN_FIELDS),
     ]
 
     if DRY_RUN:
@@ -546,25 +732,39 @@ def verify_setup():
     if DRY_RUN:
         log.info("[DRY-RUN] Summary of what would be created:")
         log.info("")
-        log.info("  Picklists (6):")
+        log.info("  Picklists (%d):", len(PICKLISTS))
         for name in PICKLISTS:
             vals = [i["value"] for i in PICKLISTS[name]["items"]]
             log.info("    - %s: %s", name, vals)
         log.info("")
-        log.info("  Work Item Types (2):")
-        log.info("    - AI Story (8 states, 10 custom fields)")
+        log.info("  Typed custom fields (%d)", len(ALL_FIELDS))
+        log.info("")
+        log.info("  Work Item Types (3):")
+        log.info("    - AI Story (%d states, %d custom fields)",
+                  len(AI_STORY_STATES), len(AI_STORY_FIELDS))
         for s in AI_STORY_STATES:
             log.info("        State: %s", s["name"])
         for f in AI_STORY_FIELDS:
             log.info("        Field: %s (req=%s)", f[0], f[1])
         log.info("")
-        log.info("    - AI Verification (4 states, 14 custom fields)")
+        log.info("    - AI Verification (%d states, %d custom fields)",
+                  len(AI_VER_STATES), len(AI_VER_FIELDS))
         for s in AI_VER_STATES:
             log.info("        State: %s", s["name"])
         for f in AI_VER_FIELDS:
             log.info("        Field: %s (req=%s)", f[0], f[1])
         log.info("")
-        log.info("  TOTAL: 6 picklists, 24 custom fields, 2 WITs, 12 states, 24 field instances")
+        log.info("    - AI Agent Run (%d states, %d custom fields)",
+                  len(AI_RUN_STATES), len(AI_RUN_FIELDS))
+        for s in AI_RUN_STATES:
+            log.info("        State: %s", s["name"])
+        for f in AI_RUN_FIELDS:
+            log.info("        Field: %s (req=%s)", f[0], f[1])
+        log.info("")
+        total_states = len(AI_STORY_STATES) + len(AI_VER_STATES) + len(AI_RUN_STATES)
+        total_instances = len(AI_STORY_FIELDS) + len(AI_VER_FIELDS) + len(AI_RUN_FIELDS)
+        log.info("  TOTAL: %d picklists, %d custom fields, 3 WITs, %d states, %d field instances",
+                  len(PICKLISTS), len(ALL_FIELDS), total_states, total_instances)
         return True
 
     # Fetch process info
@@ -579,7 +779,7 @@ def verify_setup():
         log.info("Work Item Types (%d): %s", len(names), ", ".join(names))
 
         for w in wits["value"]:
-            if w["name"] in ("AI Story", "AI Verification"):
+            if w["name"] in ("AI Story", "AI Verification", "AI Agent Run"):
                 ref = w["referenceName"]
                 log.info("  %s (ref=%s, color=#%s)", w["name"], ref, w.get("color", "?"))
 
@@ -623,13 +823,16 @@ def main():
     # Phase 1: Create picklists (global lists)
     picklist_ids = create_picklists()
 
+    # Phase 1b: Create typed custom fields (types + picklist bindings)
+    create_fields(picklist_ids)
+
     # Phase 2: Create work item types
     create_work_item_types()
 
     # Phase 3: Add custom states
     add_states()
 
-    # Phase 4: Add field instances (auto-creates custom fields + binds to WIT)
+    # Phase 4: Add field instances (binds existing fields to each WIT)
     add_field_instances()
 
     # Final verification
@@ -641,15 +844,18 @@ def main():
     log.info("=" * 60)
     log.info("")
     log.info("The AI Software Factory work item types are now set up:")
-    log.info("  - AI Story  → 8 states, 10 custom fields")
-    log.info("  - AI Verification → 4 states, 14 custom fields")
-    log.info("  - 6 picklists for controlled vocabularies")
+    log.info("  - AI Story  → 8 states, %d custom fields", len(AI_STORY_FIELDS))
+    log.info("  - AI Verification → 4 states, %d custom fields", len(AI_VER_FIELDS))
+    log.info("  - AI Agent Run → 3 states, %d custom fields (observability)", len(AI_RUN_FIELDS))
+    log.info("  - %d picklists for controlled vocabularies", len(PICKLISTS))
     log.info("")
     log.info("Next steps:")
     log.info("  1. Create an Epic for the first feature")
     log.info("  2. Create 4 AI Verification items (one per persona) linked to Epic")
     log.info("  3. After all grill sessions pass → create AI Story items")
     log.info("  4. Run the factory pipeline against each AI Story")
+    log.info("  5. The Orchestrator creates AI Agent Run children per invocation")
+    log.info("     (put them in a dedicated area path to keep boards clean)")
     log.info("")
     log.info("Implementation script for the pipeline will read/write fields")
     log.info("using the Azure DevOps REST API or az boards CLI.")

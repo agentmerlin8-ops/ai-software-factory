@@ -53,25 +53,44 @@ Every misconception surfaces either:
 
 ### Phase 3: Factory Pipeline
 
-Approved features enter an 8-agent automated pipeline:
+Approved features enter an 8-stage automated pipeline orchestrated by a 9th Orchestrator agent:
 
 ```
-Story Decomposition → Test Plan Generation → Implementation Plan
+Story Decomposition (+ bundle quality gate)
+    → Test Plan Generation → Implementation Plan
     → Plan Review (fresh context, no anchoring bias)
-    → Code Generation → Code Review
-    → Test Execution → Approved | Blocked
+    → Code Generation (story branch + PR) → Code Review
+    → Test Execution → self-repair loop on failure (max 2)
+    → Feature Verification (end-to-end vs. PRD)
+    → Human merges PRs → Done
 ```
 
-Each stage has a maximum of 2 revision loops before escalating to a human. Every artifact is a markdown file in the repo — auditable, version-controlled, and comparable across model runs.
+Every failure mode has an automated repair loop (max 2 per stage) before escalating to a human. All pipeline artifacts (test plans, implementation plans, code review findings, test results) are stored as fields on ADO work items — not committed to the repository. Code lands on `story/{id}` branches via pull requests; **a human merging the PRs is the final quality gate**.
+
+The Orchestrator creates one **AI Agent Run** work item per agent invocation, capturing model used, agent version, token counts, estimated cost, duration, quality score, and the full artifact output. All ADO bookkeeping flows through a deterministic layer — the LLM decides, validated code writes.
 
 ## ADO Integration
 
-All state is tracked in Azure DevOps using two custom work item types:
+All state and artifacts are tracked in Azure DevOps using three custom work item types:
 
-- **AI Story** — One per decomposed story. 8 states (Drafted → In Planning → Plan Review → In Coding → Code Review → In Testing → Approved | Blocked). 10 custom fields for pipeline state.
+- **AI Story** — One per decomposed story. 8 states (Drafted → In Planning → Plan Review → In Coding → Code Review → In Testing → Approved | Blocked). Fields store all pipeline artifacts: StoryContext, TestPlan, ImplPlan, TestResults, CodeReviewFindings. Aggregate observability fields roll up quality scores and total cost from child Agent Runs.
 - **AI Verification** — One per Grill Me session per persona. 4 states (Pending → In Progress → Completed | Needs Revision). 14 custom fields capturing scores, misconceptions, and triggered document fixes.
+- **AI Agent Run** — One per agent invocation. 3 states (Running → Completed | Failed). Captures: AgentName, ModelUsed, InputTokens, OutputTokens, EstimatedCostUSD, DurationSeconds, QualityScore, StageDecision, and the full ArtifactContent. Every child of its parent AI Story.
 
 The work item history *is* the audit trail. No separate system needed.
+
+## Observability
+
+The AI Agent Run work items enable continuous factory improvement:
+
+- **Cost tracking** — Every token spent, every dollar, per agent and per model (with token source flagged: exact vs. estimated)
+- **Quality tracking** — Rubric-anchored quality scores (0–100) per planning and review stage, with objective metrics (test pass rate, revision counts) as ground truth
+- **Model comparison** — Run batches with different models while keeping the reviewer model pinned; compare scores and cost in ADO dashboards
+- **Value anchoring** — Estimated human hours per story turn raw cost into a cost-vs-value ratio for stakeholders
+- **Bottleneck detection** — Identify which agents generate the most revision loops; tune per-stage loop limits from data
+- **Attribution** — Agent instruction versions are tracked per run, so quality changes can be attributed to prompt tuning vs. model changes
+
+See `ado/design-spec.md` Section 10 (measurement calibration rules) and Section 11 (dashboard widgets and WIQL query templates).
 
 ## Repository Structure
 
@@ -81,20 +100,22 @@ ai-software-factory/
 ├── README.md               # This file
 ├── docs/
 │   ├── research-landscape.md   # Landscape analysis of the OSS software factory space
-│   ├── architecture.md         # The 8-agent pipeline architecture
+│   ├── architecture.md         # The 9-agent pipeline architecture
 │   ├── context-bundle.md       # Templates for PRD, UI/UX, Arch, Test Strategy docs
 │   └── agent-instructions.md   # How to write effective agent instructions
 ├── grill-me/
 │   ├── process.md              # The full Grill Me process specification
 │   └── prompt-template.md      # Role-specific grill prompt templates
 ├── ado/
-│   ├── design-spec.md          # Complete ADO work item type design
+│   ├── design-spec.md          # Complete ADO work item type design (AI Story, AI Verification, AI Agent Run)
 │   └── setup.py                # Python script to create ADO process customizations
 ├── agents/
 │   └── *.agent.md              # GitHub Copilot agent instruction files
 └── .github/agents/
     └── *.agent.md              # Same agents (Copilot discovery path)
 ```
+
+> **Note:** Story artifacts (test plans, impl plans, reviews, test results) are stored in ADO work item fields — not in this repository. Only code and agent instruction files are committed to git.
 
 ## Environment
 
