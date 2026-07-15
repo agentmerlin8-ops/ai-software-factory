@@ -22,7 +22,7 @@ public sealed class UploadsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status413PayloadTooLarge)]
     public async Task<ActionResult<UploadResponse>> Upload(
-        IFormFile? file,
+        [FromForm] IFormFile? file,
         CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)
