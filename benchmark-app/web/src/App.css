@@ -1,0 +1,40 @@
+.upload-page {
+  align-items: center;
+  background: linear-gradient(135deg, #dce8df 0%, #f7f4e9 58%, #e7d9c3 100%);
+  display: flex;
+  justify-content: center;
+  min-height: 100svh;
+  padding: 24px;
+}
+
+.upload-panel {
+  background: #fffdf8;
+  border: 1px solid #bac7bc;
+  border-radius: 8px;
+  box-shadow: 8px 10px 0 #285943;
+  max-width: 520px;
+  padding: 40px;
+  width: 100%;
+}
+
+.eyebrow { color: #285943; font-size: 14px; font-weight: 700; letter-spacing: 0; margin: 0 0 12px; text-transform: uppercase; }
+h1 { color: #172025; font-family: Georgia, serif; font-size: 42px; font-weight: 500; letter-spacing: 0; margin: 0 0 12px; }
+.intro { color: #536158; line-height: 1.5; margin: 0 0 30px; }
+form { display: grid; gap: 14px; }
+.file-picker { align-items: center; background: #edf4ee; border: 1px dashed #5d806a; color: #285943; cursor: pointer; display: flex; font-weight: 700; justify-content: center; min-height: 94px; padding: 16px; text-align: center; }
+.file-picker:focus-within { outline: 3px solid #d2a75b; outline-offset: 2px; }
+.file-picker input { height: 1px; opacity: 0; position: absolute; width: 1px; }
+.file-name { color: #536158; font-size: 14px; margin: 0; overflow-wrap: anywhere; text-align: center; }
+button { background: #285943; border: 1px solid #1b3e2e; color: #fffdf8; cursor: pointer; font-weight: 700; min-height: 48px; padding: 12px 18px; }
+button:hover:not(:disabled) { background: #1b3e2e; }
+button:focus-visible { outline: 3px solid #d2a75b; outline-offset: 2px; }
+button:disabled { cursor: wait; opacity: 0.7; }
+.message { border-left: 4px solid; display: grid; gap: 4px; margin: 24px 0 0; padding: 14px 16px; }
+.success { background: #edf4ee; border-color: #285943; color: #1b3e2e; }
+.error { background: #f9e7df; border-color: #a44228; color: #7b291a; }
+
+@media (max-width: 520px) {
+  .upload-page { padding: 16px; }
+  .upload-panel { padding: 28px 22px; }
+  h1 { font-size: 34px; }
+}

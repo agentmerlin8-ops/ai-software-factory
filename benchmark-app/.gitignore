@@ -1,0 +1,4 @@
+api/bin/
+api/obj/
+web/node_modules/
+web/dist/
