@@ -31,6 +31,7 @@ import time
 import logging
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 
 # ──────────────────────────────────────────────────────────────────────
 # Configuration
@@ -100,7 +101,7 @@ def api_process(action, path="", body=None):
 def api_wit(project_level=False, action="GET", path="", body=None, wit_ref=None):
     """Call Work Item Tracking REST API (project-level WITs)."""
     if project_level:
-        base = f"{ORG}/{PROJECT}/_apis/wit"
+        base = f"{ORG}/{quote(PROJECT, safe='')}/_apis/wit"
     else:
         base = f"{ORG}/_apis/wit"
 
@@ -205,23 +206,21 @@ ALL_FIELDS = [
      "Full story context from the decomposer"),
     ("Custom.AIStory.TestPlan", "Test Plan", "html", None,
      "Generated test plan in Given/When/Then format"),
-    ("Custom.AIStory.ImplPlan", "Implementation Plan", "html", None,
+    ("Custom.AIStory.ImplPlan", "AI Story Implementation Plan", "html", None,
      "Generated implementation plan with tasks"),
     ("Custom.AIStory.PlanReviewStatus", "Plan Review Status", "string", "PlanReviewStatus",
      "Approval state of the implementation plan"),
     ("Custom.AIStory.CodeReviewStatus", "Code Review Status", "string", "CodeReviewStatus",
      "Approval state of the generated code"),
-    ("Custom.AIStory.ModelUsed", "AI Model Used", "string", "AIFoundryModel",
+    ("Custom.AIStory.ModelUsed", "AI Story Model Used", "string", "AIFoundryModel",
      "Which Azure Foundry model generated this story"),
     ("Custom.AIStory.TestResults", "Test Results", "html", None,
      "Pass/Fail details with evidence traces"),
     ("Custom.AIStory.RevisionCount", "Revision Count", "integer", None,
      "Loop counter for revision tracking (max 2 per stage)"),
-    ("Custom.AIStory.AcceptanceCriteria", "Acceptance Criteria", "html", None,
-     "Given/When/Then formatted acceptance criteria"),
-    ("Custom.AIStory.ParentFeature", "Parent Feature", "string", None,
+    ("Custom.AIStory.ParentFeature", "AI Story Parent Feature", "string", None,
      "Title of the parent Epic"),
-    ("Custom.AIStory.TotalCostUSD", "Total Cost (USD)", "double", None,
+    ("Custom.AIStory.TotalCostUSD", "Total Cost USD", "double", None,
      "Sum of all child AI Agent Run EstimatedCostUSD values"),
     ("Custom.AIStory.PlanRevisionCount", "Plan Revision Count", "integer", None,
      "Number of plan revision loops (max 2)"),
@@ -264,7 +263,7 @@ ALL_FIELDS = [
      "Questions with major misunderstandings"),
     ("Custom.AIVerification.SignOffStatus", "Sign Off Status", "string", "SignOffStatus",
      "Overall sign-off decision"),
-    ("Custom.AIVerification.ModelUsed", "AI Model Used", "string", "AIFoundryModel",
+    ("Custom.AIVerification.ModelUsed", "AI Verification Model Used", "string", "AIFoundryModel",
      "Model used for this persona's AI interactions"),
     ("Custom.AIVerification.GrillDate", "Grill Date", "dateTime", None,
      "When the grill session was finished"),
@@ -274,7 +273,7 @@ ALL_FIELDS = [
     ("Custom.AIVerification.GrillTranscript",
      "Grill Transcript", "html", None,
      "Full Q&A transcript of the grill session"),
-    ("Custom.AIVerification.ParentFeature", "Parent Feature", "string", None,
+    ("Custom.AIVerification.ParentFeature", "AI Verification Parent Feature", "string", None,
      "Title of the parent Epic"),
     ("Custom.AIVerification.TriggeredDocFixes",
      "Triggered Document Fixes", "html", None,
@@ -289,9 +288,9 @@ ALL_FIELDS = [
      "Prompt tokens consumed"),
     ("Custom.AIAgentRun.OutputTokens", "Output Tokens", "integer", None,
      "Completion tokens generated"),
-    ("Custom.AIAgentRun.EstimatedCostUSD", "Estimated Cost (USD)", "double", None,
+    ("Custom.AIAgentRun.EstimatedCostUSD", "Estimated Cost USD", "double", None,
      "Calculated: (InputTokens x price_in) + (OutputTokens x price_out)"),
-    ("Custom.AIAgentRun.DurationSeconds", "Duration (seconds)", "integer", None,
+    ("Custom.AIAgentRun.DurationSeconds", "Duration Seconds", "integer", None,
      "Wall-clock seconds from invocation to completion"),
     ("Custom.AIAgentRun.QualityScore", "Quality Score", "integer", None,
      "Rubric-anchored 0-100 score (Plan Reviewer, Code Reviewer runs)"),
@@ -339,7 +338,8 @@ AI_RUN_STATES = [
 # Fields per WIT: (ref_name, required, default_value, help_text)
 AI_STORY_FIELDS = [
     ("Custom.AIStory.StoryContext", True, None, "Full context from the decomposer"),
-    ("Custom.AIStory.AcceptanceCriteria", False, None, "Given/When/Then acceptance criteria"),
+    ("Microsoft.VSTS.Common.AcceptanceCriteria", False, None,
+     "Given/When/Then acceptance criteria"),
     ("Custom.AIStory.ModelUsed", True, "deepseek-v4-flash", "Azure Foundry model"),
     ("Custom.AIStory.RevisionCount", True, "0", "Revision loop counter"),
     ("Custom.AIStory.TestPlan", False, None, "Generated test plan"),
@@ -458,12 +458,19 @@ def create_picklists():
             continue
 
         log.info("  Creating picklist '%s'...", pl_name)
-        result = api_process("POST", "/lists", pl_def)
+        body = {
+            "name": pl_def["name"],
+            "type": "String",
+            "items": [item["value"] for item in pl_def["items"]],
+            "isSuggested": False,
+        }
+        result = api_process("POST", "/lists", body)
         if result:
             picklist_ids[pl_name] = result.get("id")
             log.info("    Created! ID: %s", result.get("id"))
         else:
-            log.warning("    Failed to create picklist '%s'", pl_name)
+            log.error("    Failed to create picklist '%s'; stopping setup.", pl_name)
+            return None
         time.sleep(0.5)
 
     return picklist_ids
@@ -486,61 +493,6 @@ def delete_picklists(picklist_ids):
     log.info("Picklist cleanup complete.")
 
 
-def create_fields(picklist_ids):
-    """
-    Phase 1b: Create typed custom fields via the Process Fields API.
-
-    Endpoint: POST https://dev.azure.com/{org}/_apis/work/processes/{processId}/fields
-
-    This must run BEFORE add_field_instances: the field-instance endpoint
-    binds existing fields to a WIT but cannot itself create fields with
-    the correct type (double, dateTime) or picklist bindings.
-    """
-    step("Phase 1b: Creating Typed Custom Fields")
-
-    if DRY_RUN:
-        for ref, name, ftype, picklist, desc in ALL_FIELDS:
-            pl = f", picklist={picklist}" if picklist else ""
-            log.info("  [DRY-RUN] POST .../%s/fields -> %s (%s%s)",
-                      PROCESS_ID, ref, ftype, pl)
-        return
-
-    existing = api_process("GET", f"/{PROCESS_ID}/fields")
-    existing_refs = set()
-    if existing and "value" in existing:
-        for f in existing["value"]:
-            existing_refs.add(f.get("referenceName"))
-
-    log.info("Existing custom fields: %d", len(existing_refs))
-
-    for ref, name, ftype, picklist, desc in ALL_FIELDS:
-        if ref in existing_refs:
-            log.info("  [SKIP] Field '%s' already exists", ref)
-            continue
-
-        body = {
-            "name": name,
-            "referenceName": ref,
-            "type": ftype,
-            "description": desc,
-        }
-        if picklist:
-            pl_id = picklist_ids.get(picklist)
-            if not pl_id or pl_id == "<dryrun-id>":
-                log.warning("  Picklist '%s' has no id; creating '%s' without binding",
-                             picklist, ref)
-            else:
-                body["pickList"] = {"id": pl_id}
-
-        log.info("  Creating field '%s' (%s)...", ref, ftype)
-        result = api_process("POST", f"/{PROCESS_ID}/fields", body)
-        if result:
-            log.info("    Created! %s", result.get("referenceName"))
-        else:
-            log.warning("    Failed to create field '%s'", ref)
-        time.sleep(0.3)
-
-
 def create_work_item_types():
     """
     Phase 2: Create the two custom work item types.
@@ -554,19 +506,19 @@ def create_work_item_types():
             "name": "AI Story",
             "description": "A work item representing a feature unit processed through the AI Software Factory pipeline. Has 8 states: Drafted -> In Planning -> Plan Review -> In Coding -> Code Review -> In Testing -> Approved | Blocked.",
             "color": "0078D7",
-            "icon": "icon-story",
+            "icon": "icon_airplane",
         },
         {
             "name": "AI Verification",
             "description": "Records a Grill Me comprehension verification session. One per persona (BA/PO, UI/UX, DEV, QA) per feature. States: Pending -> In Progress -> Completed | Needs Revision.",
             "color": "339933",
-            "icon": "icon-check",
+            "icon": "icon_airplane",
         },
         {
             "name": "AI Agent Run",
             "description": "Records a single AI agent invocation with cost, model, tokens, quality score, and output artifact. One per sub-agent call, child of AI Story. States: Running -> Completed | Failed.",
             "color": "005A9E",
-            "icon": "icon-gear",
+            "icon": "icon_airplane",
         },
     ]
 
@@ -596,8 +548,29 @@ def create_work_item_types():
             log.info("    Created! Ref: %s, ID: %s",
                       result.get("referenceName"), result.get("id"))
         else:
-            log.warning("    Failed to create WIT '%s'", name)
+            log.error("    Failed to create WIT '%s'; stopping setup.", name)
+            return False
         time.sleep(1)
+
+    return True
+
+
+def get_factory_wit_refs():
+    """Return factory work item type reference names keyed by display name."""
+    result = api_process("GET", f"/{PROCESS_ID}/workItemTypes")
+    if not result or "value" not in result:
+        log.error("Unable to retrieve work item types from the process.")
+        return None
+
+    return {
+        work_item_type["name"]: work_item_type["referenceName"]
+        for work_item_type in result["value"]
+        if work_item_type.get("name") in {
+            "AI Story",
+            "AI Verification",
+            "AI Agent Run",
+        }
+    }
 
 
 def add_states():
@@ -609,9 +582,9 @@ def add_states():
     step("Phase 3: Adding States")
 
     wits_and_states = [
-        ("Custom.AIStory", AI_STORY_STATES),
-        ("Custom.AIVerification", AI_VER_STATES),
-        ("Custom.AIAgentRun", AI_RUN_STATES),
+        ("AI Story", AI_STORY_STATES),
+        ("AI Verification", AI_VER_STATES),
+        ("AI Agent Run", AI_RUN_STATES),
     ]
 
     if DRY_RUN:
@@ -622,7 +595,16 @@ def add_states():
                 log.info("    - %s (cat=%s)", sd["name"], sd["stateCategory"])
         return
 
-    for ref_name, state_defs in wits_and_states:
+    wit_refs = get_factory_wit_refs()
+    if wit_refs is None:
+        return False
+
+    for wit_name, state_defs in wits_and_states:
+        ref_name = wit_refs.get(wit_name)
+        if not ref_name:
+            log.error("  Work item type '%s' was not found; stopping setup.", wit_name)
+            return False
+
         existing = api_process("GET", f"/{PROCESS_ID}/workItemTypes/{ref_name}/states")
         existing_names = set()
         if existing and "value" in existing:
@@ -652,27 +634,105 @@ def add_states():
                 log.info("      Created! State: %s, ID: %s",
                           result.get("name"), result.get("id"))
             else:
-                log.warning("      Failed to add state '%s'", s_name)
+                log.error("      Failed to add state '%s'; stopping setup.", s_name)
+                return False
             time.sleep(0.5)
+
+    return True
+
+
+def create_field_definitions(picklist_ids):
+    """
+    Phase 4: Create organization-scoped custom field definitions.
+
+    POST https://dev.azure.com/{org}/_apis/wit/fields
+
+    Fields are defined once for the organization, then attached to individual
+    work item types through the Process Fields API.
+    """
+    step("Phase 4: Creating Custom Field Definitions")
+
+    if DRY_RUN:
+        for ref_name, name, field_type, picklist_name, _ in ALL_FIELDS:
+            picklist_hint = f", picklist={picklist_name}" if picklist_name else ""
+            log.info("  [DRY-RUN] POST /_apis/wit/fields -> %s (%s: %s%s)",
+                     ref_name, name, field_type, picklist_hint)
+        return True
+
+    field_catalog = api_wit(path="/fields")
+    if not field_catalog or "value" not in field_catalog:
+        log.error("Unable to retrieve the organization field catalog.")
+        return False
+
+    existing_fields = {
+        field.get("referenceName"): field
+        for field in field_catalog["value"]
+        if field.get("referenceName")
+    }
+
+    for ref_name, name, field_type, picklist_name, description in ALL_FIELDS:
+        expected_type = "string" if picklist_name else field_type
+        existing = existing_fields.get(ref_name)
+        if existing:
+            actual_type = existing.get("type", "").lower()
+            if actual_type not in {expected_type.lower(), f"picklist{expected_type.title()}".lower()}:
+                log.error("Field '%s' already exists with type '%s', expected '%s'. "
+                          "Field types cannot be changed.",
+                          ref_name, existing.get("type"), expected_type)
+                return False
+            log.info("  [SKIP] Field '%s' already exists (type=%s)",
+                     ref_name, existing.get("type"))
+            continue
+
+        body = {
+            "name": name,
+            "referenceName": ref_name,
+            "description": description,
+            "type": "String" if picklist_name else field_type,
+            "usage": "workItem",
+            "readOnly": False,
+            "canSortBy": True,
+            "isQueryable": True,
+            "isPicklist": bool(picklist_name),
+            "isPicklistSuggested": False,
+        }
+        if picklist_name:
+            picklist_id = picklist_ids.get(picklist_name)
+            if not picklist_id:
+                log.error("Picklist '%s' required by field '%s' is unavailable.",
+                          picklist_name, ref_name)
+                return False
+            body["picklistId"] = picklist_id
+
+        log.info("  Creating field '%s' (%s)...", ref_name, field_type)
+        result = api_wit(action="POST", path="/fields", body=body)
+        if not result:
+            log.error("    Failed to create field '%s'; stopping setup.", ref_name)
+            return False
+        log.info("    Created! Ref: %s, type: %s",
+                 result.get("referenceName"), result.get("type"))
+        existing_fields[ref_name] = result
+        time.sleep(0.5)
+
+    return True
 
 
 def add_field_instances():
     """
-    Phase 4: Add fields to each WIT (which auto-creates the custom fields).
+    Phase 4: Add existing typed fields to each WIT.
 
     POST https://dev.azure.com/{org}/_apis/work/processes/{processId}/workItemTypes/{refName}/fields
 
-    This endpoint simultaneously creates the custom field (if new) and
-    binds it to the work item type with the specified rules.
+    Field definitions must be created first through the Work Item Tracking
+    Fields Create API. This endpoint then attaches those definitions to a WIT.
     """
     step("Phase 4: Adding Field Instances")
 
     wits_and_fields = [
-        ("Custom.AIStory", AI_STORY_FIELDS),
-        ("Custom.AIVerification", AI_VER_FIELDS),
-        ("Custom.AIAgentRun", AI_RUN_FIELDS),
+        ("AI Story", AI_STORY_FIELDS),
+        ("AI Verification", AI_VER_FIELDS),
+        ("AI Agent Run", AI_RUN_FIELDS),
     ]
-
     if DRY_RUN:
         for ref_name, field_list in wits_and_fields:
             log.info("  [DRY-RUN] Adding %d field instances to '%s':",
@@ -682,7 +742,27 @@ def add_field_instances():
                           fref, required, default_val or "none")
         return
 
-    for ref_name, field_list in wits_and_fields:
+    field_catalog = api_wit(path="/fields")
+    available_refs = {
+        field.get("referenceName")
+        for field in field_catalog.get("value", [])
+    } if field_catalog else set()
+    missing_fields = [ref for ref, _, _, _, _ in ALL_FIELDS if ref not in available_refs]
+    if missing_fields:
+        log.error("The following field definitions were not created: %s",
+                  ", ".join(missing_fields))
+        return False
+
+    wit_refs = get_factory_wit_refs()
+    if wit_refs is None:
+        return False
+
+    for wit_name, field_list in wits_and_fields:
+        ref_name = wit_refs.get(wit_name)
+        if not ref_name:
+            log.error("  Work item type '%s' was not found; stopping setup.", wit_name)
+            return False
+
         existing = api_process("GET", f"/{PROCESS_ID}/workItemTypes/{ref_name}/fields")
         existing_refs = set()
         if existing and "value" in existing:
@@ -704,12 +784,10 @@ def add_field_instances():
 
             body = {
                 "referenceName": fref,
-                "alwaysRequired": required,
+                "required": required,
             }
             if default_val is not None:
                 body["defaultValue"] = default_val
-            if helptext:
-                body["helpText"] = helptext
 
             log.info("    Adding field '%s' to '%s'...", fref, ref_name)
             result = api_process(
@@ -721,8 +799,11 @@ def add_field_instances():
                 log.info("      Added! Field: %s (type=%s)",
                           result.get("referenceName"), result.get("type"))
             else:
-                log.warning("      Failed to add field '%s'", fref)
+                log.error("      Failed to add field '%s'; stopping setup.", fref)
+                return False
             time.sleep(0.5)
+
+    return True
 
 
 def verify_setup():
@@ -823,17 +904,24 @@ def main():
     # Phase 1: Create picklists (global lists)
     picklist_ids = create_picklists()
 
-    # Phase 1b: Create typed custom fields (types + picklist bindings)
-    create_fields(picklist_ids)
+    if not picklist_ids:
+        sys.exit(1)
 
     # Phase 2: Create work item types
-    create_work_item_types()
+    if not create_work_item_types():
+        sys.exit(1)
 
     # Phase 3: Add custom states
-    add_states()
+    if not add_states():
+        sys.exit(1)
 
-    # Phase 4: Add field instances (binds existing fields to each WIT)
-    add_field_instances()
+    # Phase 4: Create organization field definitions
+    if not create_field_definitions(picklist_ids):
+        sys.exit(1)
+
+    # Phase 5: Attach field definitions to work item types
+    if not add_field_instances():
+        sys.exit(1)
 
     # Final verification
     verify_setup()

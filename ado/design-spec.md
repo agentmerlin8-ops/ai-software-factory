@@ -102,11 +102,11 @@ In Planning ──► Plan Review ──► In Coding ──► Code Review
 | 3 | Implementation Plan | `Custom.AIStory.ImplPlan` | HTML | — | No | Plan Review, Blocked | Generated implementation plan with tasks |
 | 4 | Plan Review Status | `Custom.AIStory.PlanReviewStatus` | String | PlanReviewStatus picklist | Yes | Plan Review | Approval state of the implementation plan |
 | 5 | Code Review Status | `Custom.AIStory.CodeReviewStatus` | String | CodeReviewStatus picklist | Yes | Code Review | Approval state of the generated code |
-| 6 | AI Model Used | `Custom.AIStory.ModelUsed` | String | AIFoundryModel picklist | Yes | Drafted | Which Azure Foundry model generated this story |
+| 6 | AI Story Model Used | `Custom.AIStory.ModelUsed` | String | AIFoundryModel picklist | Yes | Drafted | Which Azure Foundry model generated this story |
 | 7 | Test Results | `Custom.AIStory.TestResults` | HTML | — | No | In Testing | Pass/Fail details with evidence traces |
 | 8 | Revision Count | `Custom.AIStory.RevisionCount` | Integer | — | Yes | All states | **Deprecated** — superseded by the per-stage counters `PlanRevisionCount`, `CodeRevisionCount`, and `TestRevisionCount`. Retained for backward compatibility only |
-| 9 | Acceptance Criteria | `Custom.AIStory.AcceptanceCriteria` | HTML | — | No | Drafted, Blocked | Given/When/Then formatted acceptance criteria |
-| 10 | Parent Feature | `Custom.AIStory.ParentFeature` | String | — | No | Drafted | Title of the parent Epic (link stored as work item link) |
+| 9 | Acceptance Criteria | `Microsoft.VSTS.Common.AcceptanceCriteria` | HTML | — | No | Drafted, Blocked | Given/When/Then formatted acceptance criteria |
+| 10 | AI Story Parent Feature | `Custom.AIStory.ParentFeature` | String | — | No | Drafted | Title of the parent Epic (link stored as work item link) |
 
 ### Observability Fields on AI Story
 
@@ -114,7 +114,7 @@ These fields capture **aggregate metrics** rolled up from all `AI Agent Run` chi
 
 | # | Label | Reference Name | Type | Description |
 |---|-------|---------------|------|-------------|
-| 11 | Total Cost (USD) | `Custom.AIStory.TotalCostUSD` | Double | Sum of all child AI Agent Run EstimatedCostUSD values |
+| 11 | Total Cost USD | `Custom.AIStory.TotalCostUSD` | Double | Sum of all child AI Agent Run EstimatedCostUSD values |
 | 12 | Plan Revision Count | `Custom.AIStory.PlanRevisionCount` | Integer | Number of plan revision loops (separate from code loops) |
 | 13 | Code Revision Count | `Custom.AIStory.CodeRevisionCount` | Integer | Number of code revision loops |
 | 14 | Context Bundle Score | `Custom.AIStory.ContextBundleScore` | Integer | Quality score of input context bundle (0–100), set by Story Decomposer |
@@ -198,11 +198,11 @@ Pending ──► In Progress ──► Completed
 | 6 | Minor Gaps | `Custom.AIVerification.MinorGaps` | Integer | — | Yes | Completed | Questions with minor gaps |
 | 7 | Major Misunderstandings | `Custom.AIVerification.MajorMisunderstandings` | Integer | — | Yes | Completed | Questions with major misunderstandings |
 | 8 | Sign Off Status | `Custom.AIVerification.SignOffStatus` | String | SignOffStatus picklist | Yes | Completed | Overall sign-off decision |
-| 9 | AI Model Used | `Custom.AIVerification.ModelUsed` | String | AIFoundryModel picklist | Yes | Pending | Model used for this persona's AI interactions |
+| 9 | AI Verification Model Used | `Custom.AIVerification.ModelUsed` | String | AIFoundryModel picklist | Yes | Pending | Model used for this persona's AI interactions |
 | 10 | Grill Date | `Custom.AIVerification.GrillDate` | DateTime | — | Yes | Completed | When the grill session was finished |
 | 11 | Misconception Details | `Custom.AIVerification.MisconceptionDetails` | HTML | — | No | Completed | Structured markdown of misconceptions, root causes, and document fixes |
 | 12 | Grill Transcript | `Custom.AIVerification.GrillTranscript` | HTML | — | No | Completed | Full Q&A transcript of the grill session |
-| 13 | Parent Feature | `Custom.AIVerification.ParentFeature` | String | — | No | Pending | Title of the parent Epic |
+| 13 | AI Verification Parent Feature | `Custom.AIVerification.ParentFeature` | String | — | No | Pending | Title of the parent Epic |
 | 14 | Triggered Document Fixes | `Custom.AIVerification.TriggeredDocFixes` | HTML | — | No | Completed | Which documents/sections were modified as a result of this grill |
 
 ---
@@ -245,8 +245,8 @@ Records a **single agent invocation** within the pipeline. One work item is crea
 | 2 | Model Used | `Custom.AIAgentRun.ModelUsed` | String | AIFoundryModel | Yes | AI model that processed this run |
 | 3 | Input Tokens | `Custom.AIAgentRun.InputTokens` | Integer | — | Yes | Prompt tokens consumed |
 | 4 | Output Tokens | `Custom.AIAgentRun.OutputTokens` | Integer | — | Yes | Completion tokens generated |
-| 5 | Estimated Cost (USD) | `Custom.AIAgentRun.EstimatedCostUSD` | Double | — | Yes | Calculated: (InputTokens × price_in) + (OutputTokens × price_out) for the selected model |
-| 6 | Duration (seconds) | `Custom.AIAgentRun.DurationSeconds` | Integer | — | Yes | Wall-clock seconds from invocation to completion |
+| 5 | Estimated Cost USD | `Custom.AIAgentRun.EstimatedCostUSD` | Double | — | Yes | Calculated: (InputTokens × price_in) + (OutputTokens × price_out) for the selected model |
+| 6 | Duration Seconds | `Custom.AIAgentRun.DurationSeconds` | Integer | — | Yes | Wall-clock seconds from invocation to completion |
 | 7 | Quality Score | `Custom.AIAgentRun.QualityScore` | Integer | — | No | Self-reported 0–100 score; required for review agents (Plan Reviewer, Code Reviewer) |
 | 8 | Stage Decision | `Custom.AIAgentRun.StageDecision` | String | StageDecision | Yes | The verdict this run produced |
 | 9 | Revision Attempt | `Custom.AIAgentRun.RevisionAttempt` | Integer | — | Yes | Which attempt this is (1 = first run, 2 = first retry, 3 = second retry) |
@@ -373,7 +373,7 @@ Used on: `Custom.AIAgentRun.TokenSource`
 | `Custom.AIStory.ModelUsed` | String | AIFoundryModel | deepseek-v4-flash | 64 |
 | `Custom.AIStory.TestResults` | HTML | — | — | — |
 | `Custom.AIStory.RevisionCount` | Integer | — | 0 | — |
-| `Custom.AIStory.AcceptanceCriteria` | HTML | — | — | — |
+| `Microsoft.VSTS.Common.AcceptanceCriteria` | HTML | — | — | Built-in Azure DevOps field |
 | `Custom.AIStory.ParentFeature` | String | — | — | 256 |
 | `Custom.AIStory.TotalCostUSD` | Double | — | 0.0 | — |
 | `Custom.AIStory.PlanRevisionCount` | Integer | — | 0 | — |
@@ -662,7 +662,7 @@ Each work item title follows this convention:
 
 **Group: "Pipeline Status"** (collapsed by default: No)
 - State (System) — shown as state machine bar
-- AI Model Used (picklist)
+- AI Story Model Used (picklist)
 - Revision Count (integer)
 - Plan Revision Count (integer)
 - Code Revision Count (integer)
@@ -670,7 +670,7 @@ Each work item title follows this convention:
 - Code Review Status (picklist) — shown conditionally in Code Review state
 
 **Group: "Observability"** (collapsed by default: No)
-- Total Cost (USD) (double) — read-only, rolled up from child AI Agent Runs
+- Total Cost USD (double) — read-only, rolled up from child AI Agent Runs
 - Context Bundle Score (integer, 0–100)
 - Test Plan Score (integer, 0–100)
 - Impl Plan Score (integer, 0–100)
@@ -690,7 +690,7 @@ Each work item title follows this convention:
 - Tags
 
 **Group: "Links"** (collapsed by default: No) — from Basic template
-- Parent Feature (string — read-only, derived from link)
+- AI Story Parent Feature (string — read-only, derived from link)
 - All Links
 
 ### 8.2 AI Verification Form Layout
@@ -700,8 +700,8 @@ Each work item title follows this convention:
 - Persona (picklist)
 - Harness (picklist)
 - Feature Name (string)
-- AI Model Used (picklist)
-- Parent Feature (string)
+- AI Verification Model Used (picklist)
+- AI Verification Parent Feature (string)
 
 **Group: "Grill Results"** (collapsed by default: No)
 - State (System) — shown as state machine bar
@@ -740,8 +740,8 @@ Each work item title follows this convention:
 **Group: "Cost & Performance"** (collapsed by default: No)
 - Input Tokens (integer)
 - Output Tokens (integer)
-- Estimated Cost (USD) (double)
-- Duration (seconds) (integer)
+- Estimated Cost USD (double)
+- Duration Seconds (integer)
 
 **Group: "Quality"** (collapsed by default: No)
 - Stage Decision (picklist)
