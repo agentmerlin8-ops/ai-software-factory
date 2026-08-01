@@ -10,7 +10,9 @@ type UploadReceipt = {
   uploadedAtUtc: string
 }
 
-const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:5185'
+const apiBaseUrl = import.meta.env.DEV
+  ? ''
+  : (import.meta.env.VITE_API_URL ?? 'http://localhost:5192')
 
 function App() {
   const fileInput = useRef<HTMLInputElement>(null)
@@ -40,7 +42,7 @@ function App() {
     try {
       const data = new FormData()
       data.append('file', selectedFile)
-      const response = await fetch(`${apiUrl}/api/uploads`, { method: 'POST', body: data })
+      const response = await fetch(`${apiBaseUrl}/api/uploads`, { method: 'POST', body: data })
 
       if (!response.ok) {
         const problem = await response.json().catch(() => null)
