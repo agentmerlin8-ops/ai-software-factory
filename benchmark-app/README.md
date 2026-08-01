@@ -22,7 +22,7 @@ Start the API in one terminal:
 
 ```bash
 cd benchmark-app/api
-dotnet run --urls http://localhost:5185
+dotnet run --launch-profile http
 ```
 
 Start the React application in another terminal:
@@ -32,7 +32,7 @@ cd benchmark-app/web
 npm run dev
 ```
 
-Open `http://localhost:5173`. Choose a file and select **Upload file**. The page returns a receipt after the API stores the binary in Azurite and metadata in PostgreSQL.
+Open `http://localhost:5173`. The Vite dev server proxies `/api` calls to the API's default HTTP endpoint at `http://localhost:5192`, unless `VITE_API_URL` is set. Choose a file and select **Upload file**. The page returns a receipt after the API stores the binary in Azurite and metadata in PostgreSQL.
 
 ## Verification
 
