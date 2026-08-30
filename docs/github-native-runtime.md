@@ -67,6 +67,7 @@ A fine-grained PAT **cannot list private repos** via `/users/{u}/repos` — dire
 4. **Build must be green between batches.**
 5. **Storybook-first gate for UI**: stories approved by a human before feature code wires components.
 6. Max 2 revision loops per stage, then escalate — never silent failure.
+7. **De-risk infrastructure before the first coding batch.** Boot every external service the bundle depends on (emulators, sidecars, databases) with a throwaway compose file and verify the real protocol port answers. Live result (2026-08-30): three config constraints in the Service Bus emulator config were caught pre-build (max TTL 1h, max duplicate-detection window 5m, mandatory Logging section) — crashes that would otherwise have hit a coding agent mid-story, consuming its session and a revision loop each. Crash messages can mislead: the emulator printed "Out of memory" on a config-validation failure.
 
 ## Local dashboard contract
 
