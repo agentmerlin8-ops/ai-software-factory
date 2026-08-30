@@ -1,0 +1,16 @@
+# PRD — {PRODUCT}
+
+> Greenfield stub. Fill in before the factory will decompose. See `docs/context-bundle-guide.md`.
+
+## Functional requirements
+- FR-1: …
+
+## Acceptance criteria
+- Given …, when …, then …
+
+## Success metrics
+- …
+
+## Scope
+**In scope:** …
+**Out of scope:** …
