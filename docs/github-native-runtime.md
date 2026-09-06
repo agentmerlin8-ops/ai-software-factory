@@ -22,7 +22,7 @@
 ```
 Hermes/orchestrator writes approved plan
     ↓
-stories/<id>/handoff.md  (story + impl-plan path + acceptance criteria +
+stories/STORY-<id>/handoff.md  (story + impl-plan path + acceptance criteria +
                           exact files: CREATE vs EXTEND + verify commands)
     ↓
 delegate_task coder subagent — mechanical prompt: read ONLY listed files,
