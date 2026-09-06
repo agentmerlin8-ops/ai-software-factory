@@ -41,9 +41,9 @@ with a kill rule (two consecutive consults with nothing adopted → stop).
 
 ## Coder handoff contract
 
-1. A story enters the coder ONLY with a written handoff at `stories/<id>/handoff.md`: story summary, approved impl-plan path, acceptance criteria, exact files in scope (CREATE vs EXTEND), verification commands with expected output, exact commit message.
+1. A story enters the coder ONLY with a written handoff at `stories/STORY-{ID}/handoff.md`: story summary, approved impl-plan path, acceptance criteria, exact files in scope (CREATE vs EXTEND), verification commands with expected output, exact commit message.
 2. The coder subagent prompt must be **mechanical**: read ONLY listed files, write the first edit within 10 tool calls, STOP and report if anything else is needed. Never "study the repo then fix."
-3. Coder works on a `story/<id>-<slug>` branch, commits as it goes.
+3. Coder works on a `story/STORY-{ID}-<slug>` branch, commits as it goes.
 4. Code review happens on the branch diff by a **fresh-context reviewer** that never saw the planning conversation; if it must build, it uses a worktree under /tmp — never the shared tree.
 5. Review feedback goes back as copy-paste-ready diffs, or the orchestrator applies small fixes directly.
 6. Stories that CREATE the same file run **sequentially**; EXTEND-only stories may parallelize.
@@ -54,7 +54,7 @@ with a kill rule (two consecutive consults with nothing adopted → stop).
 - [ ] `git log` shows the expected commits
 - [ ] Build green (0 errors, 0 warnings where applicable)
 - [ ] Tests green
-- [ ] `stories/<id>/state.md` updated
+- [ ] `stories/STORY-{ID}/state.md` updated
 - [ ] `factory/DASHBOARD.md` regenerated
 
 ## Timeout / failure recovery
@@ -77,5 +77,5 @@ with a kill rule (two consecutive consults with nothing adopted → stop).
 
 ## Visibility contract
 
-- Every stage transition updates `stories/<id>/state.md` AND regenerates `factory/DASHBOARD.md` in the same commit.
+- Every stage transition updates `stories/STORY-{ID}/state.md` AND regenerates `factory/DASHBOARD.md` in the same commit.
 - Commit messages always carry the story ID: `STORY-003: ...`

@@ -22,7 +22,7 @@
 ```
 Hermes/orchestrator writes approved plan
     ↓
-stories/STORY-<id>/handoff.md  (story + impl-plan path + acceptance criteria +
+stories/STORY-{ID}/handoff.md  (story + impl-plan path + acceptance criteria +
                           exact files: CREATE vs EXTEND + verify commands)
     ↓
 delegate_task coder subagent — mechanical prompt: read ONLY listed files,
@@ -120,4 +120,4 @@ A fine-grained PAT **cannot list private repos** via `/users/{u}/repos` — dire
 
 ## Local dashboard contract
 
-`factory/DASHBOARD.md` is regenerated after every stage transition (same commit as `stories/<id>/state.md`). See `onboarding/templates/DASHBOARD.md`. Combined with GitHub's issue labels (`factory:*`) this gives a kanban view in the Issues tab without any external tooling.
+`factory/DASHBOARD.md` is regenerated after every stage transition (same commit as `stories/STORY-{ID}/state.md`). See `onboarding/templates/DASHBOARD.md`. Combined with GitHub's issue labels (`factory:*`) this gives a kanban view in the Issues tab without any external tooling.
