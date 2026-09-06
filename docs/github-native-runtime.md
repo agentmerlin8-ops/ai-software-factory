@@ -1,10 +1,49 @@
 # GitHub-Native Runtime — Proven Field Notes
 
-How the factory runs on plain GitHub with the `gh` CLI and Copilot coding agents. This is the open-internet / personal-lab runtime, complementary to the ADO runtime for locked-down clients.
+> **STATUS (2026-09-06): HISTORICAL for the coder stage.** GitHub coding
+> agents (`copilot-swe-agent[bot]`) are retired as the Coder runtime — not
+> cost-efficient after credits ran out. The Coder now runs as Hermes
+> `delegate_task` subagents; see the **Hermes-coder runtime** section below
+> and the MIE repo's `factory/runbook.md` for the live contract. The field
+> notes in this document remain valid evidence for everything else (gh CLI
+> mechanics, PAT limits, pitfalls 1–17), and the issue→agent handoff
+> mechanics below stay documented for any environment that still has
+> agent credits.
+>
+> **Model allocation policy:** cheapest sufficient model per role. Strong
+> frontier models with scarce budget (e.g. Fable 5.1 in Copilot Chat) are
+> reserved as **meta-advisors**: bounded consults at phase boundaries on
+> process improvement only, logged with dispositions in
+> `factory/FABLE-CONSULTS.md`, with a kill rule (two consecutive consults
+> with nothing adopted → stop consulting).
 
-**Everything in this document was verified live on 2026-08-29 against `agentmerlin8-ops/media-ingestion-engine` — not inferred from docs.**
+## Hermes-coder runtime (current, 2026-09-06)
 
-## The handoff: issue → Copilot coding agent → draft PR
+```
+Hermes/orchestrator writes approved plan
+    ↓
+stories/<id>/handoff.md  (story + impl-plan path + acceptance criteria +
+                          exact files: CREATE vs EXTEND + verify commands)
+    ↓
+delegate_task coder subagent — mechanical prompt: read ONLY listed files,
+first edit within 10 tool calls, STOP-and-report otherwise
+    ↓
+story branch in canonical tree, commits as it goes (600s timeout →
+check git status/log first; work is often done but uncommitted)
+    ↓
+fresh-context code review on `git diff main...story/...`
+(worktree under /tmp if it must build — never the shared tree)
+    ↓
+full local test suite green → PR for human approval (main protected)
+```
+
+Batching: planning ≤2 stories/subagent when plans carry full code; coder
+batches 3–5 (2–3 test-heavy). Stories that CREATE the same file run
+sequentially; EXTEND-only stories may parallelize (field note 17).
+
+## The handoff: issue → Copilot coding agent → draft PR (retired)
+
+**Everything in this section was verified live on 2026-08-29 against `agentmerlin8-ops/media-ingestion-engine` — not inferred from docs.**
 
 ```
 Hermes/orchestrator writes approved plan

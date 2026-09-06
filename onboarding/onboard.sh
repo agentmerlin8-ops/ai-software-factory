@@ -121,7 +121,8 @@ if [ -n "$REPO" ]; then
       && ok "label: $label" || bad "label: $label"
   done
 
-  # ── 4. Copilot coding-agent assignability ─────────────────────────────────
+  # ── 4. Coding-agent assignability (INFORMATIONAL — coder runtime is now
+  #        Hermes delegate_task; GitHub agents retired 2026-09-06 for cost) ──
   OWNER="${REPO%%/*}"; NAME="${REPO##*/}"
   ACTORS=$(gh api graphql -f query='
     query($owner:String!, $repo:String!) {
@@ -135,9 +136,7 @@ if [ -n "$REPO" ]; then
 d=json.load(sys.stdin)
 print('\n'.join(n['login'] for n in d['data']['repository']['suggestedActors']['nodes']))" 2>/dev/null)
   if echo "$ACTORS" | grep -qi copilot; then
-    ok "Copilot coding agent is assignable on this repo"
-  else
-    bad "Copilot coding agent NOT assignable — enable Settings → Copilot → Coding agent"
+    echo "  INFO  Copilot coding agent assignable (not used by default — see docs/github-native-runtime.md status banner)"
   fi
   if echo "$ACTORS" | grep -qi "anthropic-code-agent\|openai-code-agent"; then
     echo "  INFO  additional coding agents available: $(echo "$ACTORS" | grep -i code-agent | tr '\n' ' ')"

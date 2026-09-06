@@ -26,8 +26,8 @@ Legend: ⏳ pending · 🔵 in flight · ✅ done · 🔴 blocked · 🙋 needs-
 
 | Source | Stage work | Tokens/credits | Notes |
 |--------|-----------|----------------|-------|
-| Copilot coding agent | implementation | — | GitHub credits |
-| Hermes | orchestration, review, tests | — | — |
+| Hermes delegate_task (default model) | orchestration, planning, review, implementation, tests | — | metered |
+| Meta-advisor (scarce frontier model) | process-improvement consults only | — | see factory/FABLE-CONSULTS.md |
 
 ## Escalations & decisions log
 
