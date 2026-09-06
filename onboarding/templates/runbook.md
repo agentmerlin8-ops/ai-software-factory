@@ -5,12 +5,25 @@ Operating rules for driving the pipeline in THIS repo. The orchestrator follows 
 ## Stage flow (per story)
 
 ```
-decompose → test-plan → impl-plan → PLAN REVIEW (fresh context)
-  ├─ APPROVED → coder (delegate_task subagent on story branch) → code review on diff
-  │               ├─ APPROVED → test execution → merge-ready
-  │               └─ CHANGES  → back to coder (max 2)
-  └─ REVISIONS → back to planner (max 2)
+decompose → test-plan → impl-plan (DESIGN CONTRACT: file manifest, signatures,
+                                       test names/assertions, conventions, decisions — NO full code)
+  → script gate → PLAN REVIEW (fresh context, PASS/PASS-WITH-NITS/FAIL)
+  ├─ PASS → coder (delegate_task subagent; sole code author;
+  │           exit: build green + story's own tests green + committed)
+  │           → build+test results fed INTO code review prompt
+  │           → CODE REVIEW (fresh context, PASS/PASS-WITH-NITS/FAIL)
+  │               ├─ PASS/-WITH-NITS → nits fixed in-session (script/diff-verified,
+  │               │                    no loop consumed) → full test execution → merge-ready
+  │               └─ FAIL → back to coder (max 2)
+  └─ FAIL → back to planner (max 2)
 ```
+
+Verdict rules: nits must be enumerated, mechanical, touch no logic, and carry
+a `nit` defect-class tag; anything requiring judgment is FAIL. Every revision
+loop is tagged at the moment it happens (mechanical/reasoning/contract/nit) —
+never backfilled. Mechanical checks run as a pre-review script gate before any
+LLM reviewer spawns; loop-2 re-reviews are scoped to the artifact diff + prior
+findings only.
 
 ## Model allocation policy
 
