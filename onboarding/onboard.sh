@@ -82,6 +82,8 @@ done
 
 install_file "$FACTORY_ROOT/onboarding/templates/DASHBOARD.md"        factory/DASHBOARD.md
 install_file "$FACTORY_ROOT/onboarding/templates/runbook.md"          factory/runbook.md
+install_file "$FACTORY_ROOT/onboarding/templates/FABLE-CONSULTS.md"   factory/FABLE-CONSULTS.md
+install_file "$FACTORY_ROOT/onboarding/templates/pre_review_gate.py"  factory/gates/pre_review_gate.py
 install_file "$FACTORY_ROOT/onboarding/templates/story-state.md"      factory/templates/story-state.md
 install_file "$FACTORY_ROOT/onboarding/templates/story-handoff-issue.md" factory/templates/story-handoff-issue.md
 mkdir -p stories
@@ -121,7 +123,8 @@ if [ -n "$REPO" ]; then
       && ok "label: $label" || bad "label: $label"
   done
 
-  # ── 4. Copilot coding-agent assignability ─────────────────────────────────
+  # ── 4. Coding-agent assignability (INFORMATIONAL — coder runtime is now
+  #        Hermes delegate_task; GitHub agents retired 2026-09-06 for cost) ──
   OWNER="${REPO%%/*}"; NAME="${REPO##*/}"
   ACTORS=$(gh api graphql -f query='
     query($owner:String!, $repo:String!) {
@@ -135,9 +138,9 @@ if [ -n "$REPO" ]; then
 d=json.load(sys.stdin)
 print('\n'.join(n['login'] for n in d['data']['repository']['suggestedActors']['nodes']))" 2>/dev/null)
   if echo "$ACTORS" | grep -qi copilot; then
-    ok "Copilot coding agent is assignable on this repo"
+    echo "  INFO  Copilot coding agent assignable (not used by default — see docs/github-native-runtime.md status banner)"
   else
-    bad "Copilot coding agent NOT assignable — enable Settings → Copilot → Coding agent"
+    echo "  INFO  Copilot coding agent NOT assignable (check ran; not needed by default — see docs/github-native-runtime.md status banner. To enable: repo Settings → Copilot → coding agent allowlist)"
   fi
   if echo "$ACTORS" | grep -qi "anthropic-code-agent\|openai-code-agent"; then
     echo "  INFO  additional coding agents available: $(echo "$ACTORS" | grep -i code-agent | tr '\n' ' ')"

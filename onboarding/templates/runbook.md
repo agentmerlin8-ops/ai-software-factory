@@ -5,34 +5,57 @@ Operating rules for driving the pipeline in THIS repo. The orchestrator follows 
 ## Stage flow (per story)
 
 ```
-decompose → test-plan → impl-plan → PLAN REVIEW (fresh context)
-  ├─ APPROVED → hand off to Copilot coding agent → code review on PR
-  │               ├─ APPROVED → test execution → merge-ready
-  │               └─ CHANGES  → back to agent (max 2)
-  └─ REVISIONS → back to planner (max 2)
+decompose → test-plan → impl-plan (DESIGN CONTRACT: file manifest, signatures,
+                                       test names/assertions, conventions, decisions — NO full code)
+  → script gate → PLAN REVIEW (fresh context, PASS/PASS-WITH-NITS/FAIL)
+  ├─ PASS → coder (delegate_task subagent; sole code author;
+  │           exit: build green + story's own tests green + committed)
+  │           → build+test results fed INTO code review prompt
+  │           → CODE REVIEW (fresh context, PASS/PASS-WITH-NITS/FAIL)
+  │               ├─ PASS/-WITH-NITS → nits fixed in-session (script/diff-verified,
+  │               │                    no loop consumed) → full test execution → merge-ready
+  │               └─ FAIL → back to coder (max 2)
+  └─ FAIL → back to planner (max 2)
 ```
+
+Verdict rules: nits must be enumerated, mechanical, touch no logic, and carry
+a `nit` defect-class tag; anything requiring judgment is FAIL. Every revision
+loop is tagged at the moment it happens (mechanical/reasoning/contract/nit) —
+never backfilled. Mechanical checks run as a pre-review script gate
+(`factory/gates/pre_review_gate.py`, installed by onboarding) before any
+LLM reviewer spawns; loop-2 re-reviews are scoped to the artifact diff + prior
+findings only.
+
+## Model allocation policy
+
+Use the cheapest model sufficient for each role. Scarce frontier-model budget
+is reserved for a **meta-advisor**: bounded process-improvement consults at
+phase boundaries, logged with dispositions in `factory/FABLE-CONSULTS.md`,
+with a kill rule (two consecutive consults with nothing adopted → stop).
 
 ## Batching
 
-- **Planning stages** (decompose, test-plan, impl-plan, reviews): batch 3–5 stories per agent run. Build/test-heavy work is batched separately.
+- **Planning stages** (decompose, test-plan, impl-plan, reviews): max 2 stories per planning subagent when impl plans carry full code; 3–5 for lightweight artifacts.
+- **Coder batches:** 3–5 stories max per subagent (2–3 for test-heavy).
 - **Never** one subagent per role per story — that is 6×N calls and burns hours.
 - Keep a build/test verification between every batch. If the build is red, stop and fix before the next batch.
 
-## Copilot handoff contract
+## Coder handoff contract
 
-1. A story enters Copilot ONLY as a GitHub issue whose body contains: story summary, approved impl-plan reference, acceptance criteria, exact files in scope.
-2. Assign with: `gh issue edit <N> --add-assignee copilot-swe-agent[bot]`
-3. Copilot works in GitHub's cloud (no local timeout), opens a **draft PR** referencing `Fixes #N`.
-4. Code review happens on the PR by a **fresh-context reviewer** that never saw the planning conversation.
-5. Review feedback goes as PR review comments; Copilot addresses them on the branch.
-6. Merge only after local test execution is green: `git pull` the branch, build, run tests, then `gh pr merge`.
+1. A story enters the coder ONLY with a written handoff at `stories/STORY-{ID}/handoff.md`: story summary, approved impl-plan path, acceptance criteria, exact files in scope (CREATE vs EXTEND), verification commands with expected output, exact commit message.
+2. The coder subagent prompt must be **mechanical**: read ONLY listed files, write the first edit within 10 tool calls, STOP and report if anything else is needed. Never "study the repo then fix."
+3. Coder works on a `story/STORY-{ID}-<slug>` branch, commits as it goes.
+4. Code review happens on the branch diff by a **fresh-context reviewer** that never saw the planning conversation; if it must build, it uses a worktree under /tmp — never the shared tree.
+5. Review feedback goes back as copy-paste-ready diffs, or the orchestrator applies small fixes directly.
+6. Stories that CREATE the same file run **sequentially**; EXTEND-only stories may parallelize.
+7. Merge only after local test execution is green (full suite + the story's named test project).
 
 ## Checkpoints between batches
 
 - [ ] `git log` shows the expected commits
 - [ ] Build green (0 errors, 0 warnings where applicable)
 - [ ] Tests green
-- [ ] `stories/<id>/state.md` updated
+- [ ] `stories/STORY-{ID}/state.md` updated
 - [ ] `factory/DASHBOARD.md` regenerated
 
 ## Timeout / failure recovery
@@ -55,5 +78,5 @@ decompose → test-plan → impl-plan → PLAN REVIEW (fresh context)
 
 ## Visibility contract
 
-- Every stage transition updates `stories/<id>/state.md` AND regenerates `factory/DASHBOARD.md` in the same commit.
+- Every stage transition updates `stories/STORY-{ID}/state.md` AND regenerates `factory/DASHBOARD.md` in the same commit.
 - Commit messages always carry the story ID: `STORY-003: ...`

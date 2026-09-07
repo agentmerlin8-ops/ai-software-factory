@@ -142,7 +142,7 @@ git clone https://github.com/agentmerlin8-ops/ai-software-factory
 ./ai-software-factory/onboarding/onboard.sh /path/to/your/repo
 ```
 
-The onboarding script detects repo posture, installs agent prompts + dashboard + runbook + story templates, creates pipeline labels, verifies the Copilot coding agent is assignable, and writes a PASS/FAIL preflight report. Re-runnable, never overwrites your files. See `onboarding/README.md` and `docs/github-native-runtime.md` (proven field notes from live runs).
+The onboarding script detects repo posture, installs agent prompts + dashboard + runbook + story templates, creates pipeline labels, and writes a PASS/FAIL preflight report. Re-runnable, never overwrites your files. See `onboarding/README.md` and `docs/github-native-runtime.md` (proven field notes from live runs; note the 2026-09-06 status banner — coder runtime moved to Hermes delegate_task).
 
 ### Option B — ADO runtime (locked-down clients)
 
