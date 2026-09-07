@@ -102,13 +102,18 @@ ai-software-factory/
 │   ├── research-landscape.md   # Landscape analysis of the OSS software factory space
 │   ├── architecture.md         # The 9-agent pipeline architecture
 │   ├── context-bundle.md       # Templates for PRD, UI/UX, Arch, Test Strategy docs
-│   └── agent-instructions.md   # How to write effective agent instructions
+│   ├── agent-instructions.md   # How to write effective agent instructions
+│   └── github-native-runtime.md # PROVEN field notes: gh CLI + Copilot coding-agent handoff
 ├── grill-me/
 │   ├── process.md              # The full Grill Me process specification
 │   └── prompt-template.md      # Role-specific grill prompt templates
 ├── ado/
 │   ├── design-spec.md          # Complete ADO work item type design (AI Story, AI Verification, AI Agent Run)
 │   └── setup.py                # Python script to create ADO process customizations
+├── onboarding/             # Repeatable onboarding into any greenfield/brownfield repo
+│   ├── README.md               # Quick start + consistency guarantee
+│   ├── onboard.sh              # Idempotent installer (posture detect, install, labels, preflight)
+│   └── templates/              # Dashboard, runbook, story/handoff/state templates, bundle stubs
 ├── agents/
 │   └── *.agent.md              # GitHub Copilot agent instruction files
 └── .github/agents/
@@ -127,6 +132,19 @@ This factory is designed for **locked-down client environments**:
 - **Design:** Figma (exported specs)
 
 ## Getting Started
+
+### Option A — GitHub-native runtime (fastest, open internet)
+
+Bring the factory into any greenfield or brownfield repo with one idempotent command:
+
+```bash
+git clone https://github.com/agentmerlin8-ops/ai-software-factory
+./ai-software-factory/onboarding/onboard.sh /path/to/your/repo
+```
+
+The onboarding script detects repo posture, installs agent prompts + dashboard + runbook + story templates, creates pipeline labels, verifies the Copilot coding agent is assignable, and writes a PASS/FAIL preflight report. Re-runnable, never overwrites your files. See `onboarding/README.md` and `docs/github-native-runtime.md` (proven field notes from live runs).
+
+### Option B — ADO runtime (locked-down clients)
 
 1. Clone this repo
 2. Set up an inherited process from "Basic" in your ADO org
