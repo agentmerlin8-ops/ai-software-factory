@@ -1,12 +1,12 @@
 # Factory Field Notes
 
-Operational lessons harvested from live factory runs. Newest first.
-Numbering continues from the notes referenced in the factory runbook
-(`factory/runbook.md`) and the `agentic-software-factory` skill (notes 1–17
-predate this file — they were tracked in session history and runbook
-citations before the catalog was committed; this file starts the durable
-catalog at 18). Component and file names below are generalized from a
-private first pipeline-v2 run; the lessons are project-agnostic.
+Operational lessons harvested from live factory runs, in chronological
+order (note 18 first). Numbering continues from the notes referenced in the
+factory runbook (`factory/runbook.md`) and the `agentic-software-factory`
+skill (notes 1–17 predate this file — they were tracked in session history
+and runbook citations before the catalog was committed; this file starts
+the durable catalog at 18). Component and file names below are generalized
+from a private first pipeline-v2 run; the lessons are project-agnostic.
 
 ## 18 — Planner trusted component names without verifying the render tree (2026-09-06, loop 1, `contract`)
 
@@ -22,8 +22,10 @@ private first pipeline-v2 run; the lessons are project-agnostic.
   Candidate script-gate check (G6): manifest paths that are pages/components
   must be import-reachable from the route tree — or at minimum the planner
   must state the import chain per wired surface.
-- **Follow-up:** extend `factory/gates/pre_review_gate.py` when loop tags
-  accumulate another `contract`-class plan defect of this shape.
+- **Follow-up:** extend the pre-review gate script (`pre_review_gate.py`,
+  shipped as an onboarding template and installed to `factory/gates/` in the
+  target repo) when loop tags accumulate another `contract`-class plan
+  defect of this shape.
 
 ## 19 — Destructive-gate state carry-over in always-mounted dialogs (2026-09-06, code loop 1, `reasoning`)
 
