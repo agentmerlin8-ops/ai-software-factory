@@ -83,6 +83,7 @@ done
 install_file "$FACTORY_ROOT/onboarding/templates/DASHBOARD.md"        factory/DASHBOARD.md
 install_file "$FACTORY_ROOT/onboarding/templates/runbook.md"          factory/runbook.md
 install_file "$FACTORY_ROOT/onboarding/templates/FABLE-CONSULTS.md"   factory/FABLE-CONSULTS.md
+install_file "$FACTORY_ROOT/onboarding/templates/pre_review_gate.py"  factory/gates/pre_review_gate.py
 install_file "$FACTORY_ROOT/onboarding/templates/story-state.md"      factory/templates/story-state.md
 install_file "$FACTORY_ROOT/onboarding/templates/story-handoff-issue.md" factory/templates/story-handoff-issue.md
 mkdir -p stories

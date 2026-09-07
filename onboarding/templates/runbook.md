@@ -21,7 +21,8 @@ decompose → test-plan → impl-plan (DESIGN CONTRACT: file manifest, signature
 Verdict rules: nits must be enumerated, mechanical, touch no logic, and carry
 a `nit` defect-class tag; anything requiring judgment is FAIL. Every revision
 loop is tagged at the moment it happens (mechanical/reasoning/contract/nit) —
-never backfilled. Mechanical checks run as a pre-review script gate before any
+never backfilled. Mechanical checks run as a pre-review script gate
+(`factory/gates/pre_review_gate.py`, installed by onboarding) before any
 LLM reviewer spawns; loop-2 re-reviews are scoped to the artifact diff + prior
 findings only.
 

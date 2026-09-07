@@ -37,7 +37,8 @@ def check(story_dir: Path, created_paths: dict):
     if not creates and not extends:
         findings.append(f"{sid}: G1 — no CREATE/EXTEND file manifest found")
     for c in creates:
-        if c in created_paths:
+        # same-story re-listing (handoff echoes impl-plan manifest) is not a collision
+        if c in created_paths and created_paths[c] != sid:
             findings.append(
                 f"{sid}: G2 — CREATE collision with {created_paths[c]} on `{c}` "
                 "(must run SEQUENTIALLY — field note 17)"
