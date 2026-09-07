@@ -235,9 +235,9 @@ Misconception record links to the fix (ADO work item comment)
 Each grilling session creates or updates an ADO work item under the feature epic:
 
 ```yaml
-Work Item: "Grill: DEV Comprehension — Podcast Ingestion Engine"
+Work Item: "Grill: DEV Comprehension — <Feature Name>"
 Type: AI Verification (custom work item type)
-Parent Feature: "Podcast Ingestion Engine"
+Parent Feature: "<Feature Name>"
 
 Fields:
   Persona: DEV
