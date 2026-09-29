@@ -67,7 +67,7 @@ Story decomposition (+ bundle quality gate)
     → HUMAN MERGE GATE → live proof → closeout (provenance rendered)
 ```
 
-Principles that hold in every runtime:
+Principles of the Factory Kit model — every kit runtime holds to these; the enterprise ADO variant differs, keeping its state in work items rather than the repo:
 
 - **The repo is the state.** An append-only event ledger is the single source of truth; dashboards, story-state files, and provenance documents are *generated renders* — never hand-edited.
 - **Deterministic bookkeeping.** A controller validates every transition against evidence; gates are mechanical scripts. AI makes the judgment calls; software owns state, checks, and bookkeeping.
@@ -93,7 +93,7 @@ The process is deliberately independent of any single agent product:
 
 - **Available now**: agent instruction files, Grill Me process, context-bundle templates, onboarding installer, pipeline architecture docs, field notes, benchmark app.
 - **Reference implementation**: a private first-party deployment runs the ledger-based pipeline (controller, gates, provenance) in production; its operational lessons are harvested into [`docs/field-notes.md`](docs/field-notes.md) (catalog starts at note 18).
-- **In build — Factory Kit v0.1**: design docs are merged in [`kit-v0.1/`](kit-v0.1/prd.md). The build covers the kit skeleton, the deterministic control plane, `human` + `hermes` adapters, the complete idea→PR runbook, and two acceptance events: an end-to-end **dress rehearsal** on `benchmark-app/` and a two-machine **handover drill**. Onboarding hardening — including a target-repo readiness checklist and a scripted verify mode — follows immediately after.
+- **In build — Factory Kit v0.1**: design docs are merged in [`kit-v0.1/`](kit-v0.1/prd.md). The build covers the kit skeleton, the deterministic control plane, `human` + `hermes` adapters, the complete idea→PR runbook, and two acceptance events: an end-to-end **dress rehearsal** on `benchmark-app/` and a two-machine **handover drill** — plus the target-repo **readiness checklist** and **scripted verify mode** (fail-closed, CI-gateable). The fresh-repo onboarding hardening test-out follows in v0.1.x.
 
 ## Repository Structure
 
@@ -115,7 +115,7 @@ ai-software-factory/
 
 ## Observability & Audit
 
-Every dispatch is recorded: pre-spawn dispatch ID, role, model tier, token usage (or explicit `null` + reason — never invented zeros), outcome, and revision loops with classified root causes. Renders generate per-story state and a **provenance trail** — idea → decisions → dispatches → evidence → PR — and metrics reconcile cost and loop rates against frozen baselines.
+Every dispatch is recorded: pre-spawn dispatch ID, role, model tier, token usage (or explicit `null` + reason — never invented zeros), outcome, and revision loops — each tagged at the moment it happens with a class (**mechanical / reasoning / contract / nit**) and a one-line root cause. Renders generate per-story state and a **provenance trail** — idea → decisions → dispatches → evidence → PR — and metrics reconcile cost and loop rates (against a frozen baseline where one exists).
 
 In the ADO variant, the same data lives on custom work items — **AI Story** (per story), **AI Verification** (per grill session), **AI Agent Run** (per agent invocation) — where the work item history *is* the audit trail. See [`ado/design-spec.md`](ado/design-spec.md).
 
@@ -130,7 +130,7 @@ git clone https://github.com/agentmerlin8-ops/ai-software-factory
 
 The script detects greenfield/brownfield posture, installs the factory structure (idempotent — never overwrites your files), creates the pipeline labels, and writes a PASS/FAIL preflight report. See [`onboarding/README.md`](onboarding/README.md).
 
-> The onboarding flow is being reworked alongside kit v0.1 for runtime-agnostic requirements — readiness checklist + scripted verify mode ([`kit-v0.1/target-repo-readiness.md`](kit-v0.1/target-repo-readiness.md)).
+> The onboarding flow is being reworked in kit v0.1 for runtime-agnostic requirements — the readiness checklist and scripted verify mode ship with v0.1 ([`kit-v0.1/target-repo-readiness.md`](kit-v0.1/target-repo-readiness.md)); the fresh-repo hardening test-out follows in v0.1.x.
 
 ### Read the process
 
