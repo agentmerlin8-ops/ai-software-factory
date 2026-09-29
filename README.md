@@ -1,157 +1,147 @@
 # AI Software Factory
 
-A structured, multi-persona process for building software with AI agents — from specification through comprehension verification, to automated development and deployment.
+A structured, **runtime-agnostic** process for building software with AI agents — from idea refinement, through comprehension verification, to a completed and proven pull request.
 
 ## What This Is
 
-The AI Software Factory is a **process framework** for producing high-quality software using AI coding agents. It solves two fundamental problems:
+The AI Software Factory is a **process framework** for producing high-quality software with AI coding agents. It solves two problems:
 
-1. **Shared understanding** — Ensuring every stakeholder (PO, designer, developer, QA) truly understands the feature before a line of code is written
-2. **Structured production** — Running specifications through a verifiable multi-agent pipeline with quality gates
+1. **Shared understanding** — every stakeholder (PO, designer, developer, QA) demonstrates understanding of the feature *before* a line of code is written.
+2. **Structured production** — specifications run through a verifiable, gated pipeline that leaves an auditable trail from idea to merged, proven code.
+
+This repository is also the home of the **Factory Kit** (v0.1 in active development — design docs in [`kit-v0.1/`](kit-v0.1/prd.md)): the same process packaged so it lives **inside the target repository**, runs on nothing but `git` + `gh` + `python3`, and can be driven by **a human operator or any AI orchestrator**. Every AI runtime sits behind an interchangeable adapter.
 
 ## The Core Insight
 
-The biggest failure mode in AI-assisted development isn't the AI — it's that **humans don't read the documents**. A developer skimming a PRD and making assumptions will produce bad code regardless of how good the AI model is.
+The biggest failure mode in AI-assisted development isn't the AI — it's that **humans don't read the documents**. A developer skimming a PRD and making assumptions will produce bad code regardless of how good the model is.
 
-Our solution: **role-specific comprehension verification** ("Grill Me") sessions that force each persona to demonstrate understanding at the depth appropriate to their role, before any code is generated.
+The answer is **role-specific comprehension verification** ("Grill Me"): each persona defends their understanding of the relevant documents at the depth their role requires, before any code is generated. Every misconception surfaces either a **persona misunderstanding** (educate) or a **document ambiguity** (fix the document — a closed feedback loop that improves the specs over time).
 
 ## How It Works
 
-### Phase 1: Context Bundle Assembly
+### Phase 1 — Refinement & Context Bundle
 
-Four personas contribute structured documents that define what to build:
+An idea enters (a GitHub issue in the kit model) and is refined — in a live grill with the product owner — into a **context bundle** of four documents:
 
-| Persona | Document | Tool |
-|---|---|---|
-| **BA/PO** | PRD (requirements, acceptance criteria, scope) | M365 Copilot |
-| **UI/UX** | Figma spec (user flows, states, API contract) | M365 Copilot |
-| **DEV** | Engineering Design (architecture, data model) | GitHub Copilot |
-| **QA** | Test Strategy (test approach, coverage targets) | GitHub Copilot |
+| Persona | Document |
+|---|---|
+| BA/PO | **PRD** — requirements, acceptance criteria, explicit scope boundaries |
+| UI/UX | **Interface spec** — user flows, states, component contracts |
+| DEV | **Architecture** — components, data model, integrations |
+| QA | **Test Strategy** — test pyramid, categories, anti-patterns |
 
-### Phase 2: Grill Me — Comprehension Verification
+Templates and required sections: [`docs/context-bundle.md`](docs/context-bundle.md).
 
-Each persona gets grilled by an AI on their specific understanding of the relevant documents:
+### Phase 2 — Grill Me (Comprehension Verification)
+
+Each persona is grilled by an AI on their specific understanding of the documents:
 
 ```
 PRD drafted by BA/PO
     │
-    ├──▶ [Grill: PRD Quality]  ← BA/PO defends/refines the PRD
+    ├──▶ [Grill: PRD Quality]      ← BA/PO defends/refines the PRD
     │
-    ├──▶ UI/UX reads PRD → Figma → [Grill: UI/UX Understanding]
+    ├──▶ UI/UX reads PRD → spec    → [Grill: UI/UX Understanding]
     │
-    ├──▶ DEV reads PRD + Figma → Eng Design → [Grill: DEV Understanding]
+    ├──▶ DEV reads PRD + spec      → [Grill: DEV Understanding]
     │
-    ├──▶ QA reads PRD + Figma → Test Plan → [Grill: QA Understanding]
+    ├──▶ QA reads all docs         → [Grill: QA Understanding]
     │
     ▼
-All-persona sign-off → Approved → To Factory Pipeline
+All-persona sign-off → approved → to the production pipeline
 ```
 
-Every misconception surfaces either:
-- A **persona misunderstanding** (addressed through education)
-- A **document ambiguity** (triggers a document fix, creating a closed feedback loop)
+Each grill produces a structured record — questions asked, scores, misconception root-cause analysis, and triggered document fixes. See [`grill-me/process.md`](grill-me/process.md) and the role-specific prompts in [`grill-me/prompt-template.md`](grill-me/prompt-template.md).
 
-### Phase 3: Factory Pipeline
+### Phase 3 — Production Pipeline
 
-Approved features enter an 8-stage automated pipeline orchestrated by a 9th Orchestrator agent:
+Approved features are decomposed into stories and run through a gated pipeline:
 
 ```
-Story Decomposition (+ bundle quality gate)
-    → Test Plan Generation → Implementation Plan
-    → Plan Review (fresh context, no anchoring bias)
-    → Code Generation (story branch + PR) → Code Review
-    → Test Execution → self-repair loop on failure (max 2)
-    → Feature Verification (end-to-end vs. PRD)
-    → Human merges PRs → Done
+Story decomposition (+ bundle quality gate)
+    → test plan → implementation plan
+    → gate (mechanical checks) → plan review (fresh context)
+    → coder dispatch → build green + named tests green
+    → draft PR → two-pass adversarial review (fresh context)
+    → fix pass → full suite green → merge-eligible
+    → HUMAN MERGE GATE → live proof → closeout (provenance rendered)
 ```
 
-Every failure mode has an automated repair loop (max 2 per stage) before escalating to a human. All pipeline artifacts (test plans, implementation plans, code review findings, test results) are stored as fields on ADO work items — not committed to the repository. Code lands on `story/{id}` branches via pull requests; **a human merging the PRs is the final quality gate**.
+Principles that hold in every runtime:
 
-The Orchestrator creates one **AI Agent Run** work item per agent invocation, capturing model used, agent version, token counts, estimated cost, duration, quality score, and the full artifact output. All ADO bookkeeping flows through a deterministic layer — the LLM decides, validated code writes.
+- **The repo is the state.** An append-only event ledger is the single source of truth; dashboards, story-state files, and provenance documents are *generated renders* — never hand-edited.
+- **Deterministic bookkeeping.** A controller validates every transition against evidence; gates are mechanical scripts. AI makes the judgment calls; software owns state, checks, and bookkeeping.
+- **Fresh-context adversarial review.** Reviewers never see the planner's reasoning (no anchoring bias); re-reviews see their own prior findings so fixes are verified rather than re-litigated.
+- **Dispatch packages.** Every role runs from one self-contained package — role instruction, inputs pinned at a recorded SHA, expected outputs, stop rules. Paste it into any AI chat, or feed it to an agent adapter. Same process either way.
+- **Ownership lock.** One story has at most one active owner; transfers happen only via recorded handover events. Concurrent work is *prevented*, not merged.
+- **Bounded loops.** Max 2 revision loops per stage, then escalation to a human.
+- **Human gates only where judgment belongs** — interface approvals (Storybook for UI work), the merge gate, and escalations. A human merging the PR is the final quality gate; the factory never merges autonomously.
 
-## ADO Integration
+The full design of the runtime-agnostic kit — ledger schema, controller, gates, adapters, and the idea-to-PR runbook — is in [`kit-v0.1/architecture.md`](kit-v0.1/architecture.md) and [`kit-v0.1/prd.md`](kit-v0.1/prd.md). The enterprise (ADO) variant of the pipeline is documented in [`docs/architecture.md`](docs/architecture.md) and [`ado/design-spec.md`](ado/design-spec.md).
 
-All state and artifacts are tracked in Azure DevOps using three custom work item types:
+### Runtimes & Adapters
 
-- **AI Story** — One per decomposed story. 8 states (Drafted → In Planning → Plan Review → In Coding → Code Review → In Testing → Approved | Blocked). Fields store all pipeline artifacts: StoryContext, TestPlan, ImplPlan, TestResults, CodeReviewFindings. Aggregate observability fields roll up quality scores and total cost from child Agent Runs.
-- **AI Verification** — One per Grill Me session per persona. 4 states (Pending → In Progress → Completed | Needs Revision). 14 custom fields capturing scores, misconceptions, and triggered document fixes.
-- **AI Agent Run** — One per agent invocation. 3 states (Running → Completed | Failed). Captures: AgentName, ModelUsed, InputTokens, OutputTokens, EstimatedCostUSD, DurationSeconds, QualityScore, StageDecision, and the full ArtifactContent. Every child of its parent AI Story.
+The process is deliberately independent of any single agent product:
 
-The work item history *is* the audit trail. No separate system needed.
+| Mode | Executor | Status |
+|---|---|---|
+| **Human** | You, with any AI chat of your choice | core to kit v0.1 |
+| **Agent runtime** (e.g. Hermes `delegate_task`) | AI orchestrator following the same runbook | first adapter, kit v0.1 |
+| **CLI coding agents / API endpoints** | claude-code, codex, any OpenAI-compatible endpoint (locked-down deployments) | in design (v0.2) |
 
-## Observability
+## Current Status
 
-The AI Agent Run work items enable continuous factory improvement:
-
-- **Cost tracking** — Every token spent, every dollar, per agent and per model (with token source flagged: exact vs. estimated)
-- **Quality tracking** — Rubric-anchored quality scores (0–100) per planning and review stage, with objective metrics (test pass rate, revision counts) as ground truth
-- **Model comparison** — Run batches with different models while keeping the reviewer model pinned; compare scores and cost in ADO dashboards
-- **Value anchoring** — Estimated human hours per story turn raw cost into a cost-vs-value ratio for stakeholders
-- **Bottleneck detection** — Identify which agents generate the most revision loops; tune per-stage loop limits from data
-- **Attribution** — Agent instruction versions are tracked per run, so quality changes can be attributed to prompt tuning vs. model changes
-
-See `ado/design-spec.md` Section 10 (measurement calibration rules) and Section 11 (dashboard widgets and WIQL query templates).
+- **Available now**: agent instruction files, Grill Me process, context-bundle templates, onboarding installer, pipeline architecture docs, field notes, benchmark app.
+- **Reference implementation**: a private first-party deployment runs the ledger-based pipeline (controller, gates, provenance) in production; its operational lessons are harvested into [`docs/field-notes.md`](docs/field-notes.md) (catalog starts at note 18).
+- **In build — Factory Kit v0.1**: design docs are merged in [`kit-v0.1/`](kit-v0.1/prd.md). The build covers the kit skeleton, the deterministic control plane, `human` + `hermes` adapters, the complete idea→PR runbook, and two acceptance events: an end-to-end **dress rehearsal** on `benchmark-app/` and a two-machine **handover drill**. Onboarding hardening — including a target-repo readiness checklist and a scripted verify mode — follows immediately after.
 
 ## Repository Structure
 
 ```
 ai-software-factory/
-├── LICENSE                 # MIT — do whatever you want with this
-├── README.md               # This file
-├── docs/
-│   ├── research-landscape.md   # Landscape analysis of the OSS software factory space
-│   ├── architecture.md         # The 9-agent pipeline architecture
-│   ├── context-bundle.md       # Templates for PRD, UI/UX, Arch, Test Strategy docs
-│   ├── agent-instructions.md   # How to write effective agent instructions
-│   └── github-native-runtime.md # PROVEN field notes: gh CLI + Copilot coding-agent handoff
-├── grill-me/
-│   ├── process.md              # The full Grill Me process specification
-│   └── prompt-template.md      # Role-specific grill prompt templates
-├── ado/
-│   ├── design-spec.md          # Complete ADO work item type design (AI Story, AI Verification, AI Agent Run)
-│   └── setup.py                # Python script to create ADO process customizations
-├── onboarding/             # Repeatable onboarding into any greenfield/brownfield repo
-│   ├── README.md               # Quick start + consistency guarantee
-│   ├── onboard.sh              # Idempotent installer (posture detect, install, labels, preflight)
-│   └── templates/              # Dashboard, runbook, story/handoff/state templates, bundle stubs
-├── agents/
-│   └── *.agent.md              # GitHub Copilot agent instruction files
-└── .github/agents/
-    └── *.agent.md              # Same agents (Copilot discovery path)
+├── kit-v0.1/              # Factory Kit v0.1 design docs: PRD, architecture,
+│                          #   test strategy, target-repo readiness checklist
+├── agents/                # Pipeline role instructions (the source of truth)
+├── .github/agents/        # Same instructions, Copilot-discovery path
+├── grill-me/              # Comprehension verification: process + prompt templates
+├── onboarding/            # Idempotent onboarding: installer, templates, preflight
+├── docs/                  # Context-bundle templates, pipeline architecture,
+│                          #   field notes, runtime notes, research, agent evaluations
+├── ado/                   # Enterprise variant: ADO work-item-type design + setup script
+├── benchmark-app/         # Reference target app for end-to-end dress rehearsals
+├── LICENSE                # MIT
+└── README.md
 ```
 
-> **Note:** Story artifacts (test plans, impl plans, reviews, test results) are stored in ADO work item fields — not in this repository. Only code and agent instruction files are committed to git.
+## Observability & Audit
 
-## Environment
+Every dispatch is recorded: pre-spawn dispatch ID, role, model tier, token usage (or explicit `null` + reason — never invented zeros), outcome, and revision loops with classified root causes. Renders generate per-story state and a **provenance trail** — idea → decisions → dispatches → evidence → PR — and metrics reconcile cost and loop rates against frozen baselines.
 
-This factory is designed for **locked-down client environments**:
-- **Runtime:** VS Code devcontainer with GitHub Copilot
-- **Models:** Azure AI Foundry (DeepSeek V4 Flash/Pro, GPT-4o, others)
-- **State:** Azure DevOps (custom work item types)
-- **Code:** Git + GitHub (PR-based workflow)
-- **Design:** Figma (exported specs)
+In the ADO variant, the same data lives on custom work items — **AI Story** (per story), **AI Verification** (per grill session), **AI Agent Run** (per agent invocation) — where the work item history *is* the audit trail. See [`ado/design-spec.md`](ado/design-spec.md).
 
 ## Getting Started
 
-### Option A — GitHub-native runtime (fastest, open internet)
-
-Bring the factory into any greenfield or brownfield repo with one idempotent command:
+### Adopt the framework (current onboarding)
 
 ```bash
 git clone https://github.com/agentmerlin8-ops/ai-software-factory
 ./ai-software-factory/onboarding/onboard.sh /path/to/your/repo
 ```
 
-The onboarding script detects repo posture, installs agent prompts + dashboard + runbook + story templates, creates pipeline labels, and writes a PASS/FAIL preflight report. Re-runnable, never overwrites your files. See `onboarding/README.md` and `docs/github-native-runtime.md` (proven field notes from live runs; note the 2026-09-06 status banner — coder runtime moved to Hermes delegate_task).
+The script detects greenfield/brownfield posture, installs the factory structure (idempotent — never overwrites your files), creates the pipeline labels, and writes a PASS/FAIL preflight report. See [`onboarding/README.md`](onboarding/README.md).
 
-### Option B — ADO runtime (locked-down clients)
+> The onboarding flow is being reworked alongside kit v0.1 for runtime-agnostic requirements — readiness checklist + scripted verify mode ([`kit-v0.1/target-repo-readiness.md`](kit-v0.1/target-repo-readiness.md)).
 
-1. Clone this repo
-2. Set up an inherited process from "Basic" in your ADO org
-3. Run `ado/setup.py` to create the custom work item types
-4. Read `grill-me/process.md` to understand the comprehension verification flow
-5. Load the `.agent.md` files into GitHub Copilot
-6. Start with a PRD and walk through the process
+### Read the process
+
+1. [`grill-me/process.md`](grill-me/process.md) — comprehension verification (start here as a PO/analyst)
+2. [`docs/context-bundle.md`](docs/context-bundle.md) — the four specification documents
+3. [`kit-v0.1/prd.md`](kit-v0.1/prd.md) — where the factory is going: the runtime-agnostic kit
+4. [`docs/field-notes.md`](docs/field-notes.md) + [`docs/github-native-runtime.md`](docs/github-native-runtime.md) — operational reality from live runs
+
+### Enterprise / locked-down environments
+
+The ADO-based variant (custom work item types as the state machine, no repository-committed artifacts) is documented in [`ado/design-spec.md`](ado/design-spec.md). Model substitution (Azure AI Foundry and other OpenAI-compatible endpoints) and devcontainer setups are covered in [`docs/github-native-runtime.md`](docs/github-native-runtime.md) and the kit's adapter design ([`kit-v0.1/architecture.md`](kit-v0.1/architecture.md)).
 
 ## License
 
